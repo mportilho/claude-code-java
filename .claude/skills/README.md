@@ -27,6 +27,7 @@ Each skill folder contains:
 | [api-contract-review](api-contract-review/) | REST API audit: HTTP semantics, versioning, compatibility |
 | [concurrency-review](concurrency-review/) | Thread safety, race conditions, @Async, Virtual Threads |
 | [performance-smell-detection](performance-smell-detection/) | Code-level performance smells (streams, boxing, regex) |
+| [performance-benchmark](performance-benchmark/) | JMH benchmarking process for safe Java optimizations |
 | [test-quality](test-quality/) | JUnit 5 + AssertJ testing patterns |
 | [maven-dependency-audit](maven-dependency-audit/) | Audit dependencies for updates and vulnerabilities |
 | [security-audit](security-audit/) | OWASP Top 10, input validation, injection prevention |

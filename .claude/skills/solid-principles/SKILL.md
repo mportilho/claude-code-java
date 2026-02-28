@@ -615,6 +615,27 @@ public class MockEmailSender implements NotificationSender { }
 
 ---
 
+## Master Rule: Encapsulation of Technical Constraints
+
+> **"Whenever you see a technical pattern (like a lock, a mandatory log, or a repetitive validation) being applied around an object call in multiple places,
+you have found an opportunity to raise the level of abstraction and move that responsibility inside the object."**
+
+This rule extends **SRP** and **DIP** by ensuring that abstractions are responsible for their own structural integrity and technical contracts, never
+delegating these concerns to the client code.
+
+### Why it matters:
+1. **API "Correct by Construction"**: The data structure makes it impossible to use incorrectly.
+2. **Reduced Cognitive Load**: Clients focus on "What" (business intent) instead of "How" (technical mechanics like locking).
+3. **DRY (Technical)**: Technical implementation details are defined once, not scattered around every call site.
+
+### Application:
+- **Concurrency**: Move `synchronized` / `Lock` inside the data structure.
+- **Validation**: Use **Value Objects** that validate themselves upon construction.
+- **Resilience**: Use **Decorators** to handle retries or circuit breakers internally.
+- **Audit**: Use **Proxies** or internal logic to trigger mandatory logging.
+
+---
+
 ## SOLID Review Checklist
 
 When reviewing code, check:

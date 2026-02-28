@@ -57,7 +57,7 @@ claude
 > /java-code-review
 ```
 
-## Available Skills (18)
+## Available Skills (19)
 
 Skills are automatically loaded by Claude Code based on context.
 
@@ -75,6 +75,7 @@ Skills are automatically loaded by Claude Code based on context.
 | [**api-contract-review**](.claude/skills/api-contract-review/) | "review API", "check REST endpoints" |
 | [**concurrency-review**](.claude/skills/concurrency-review/) | "check thread safety", "review async code" |
 | [**performance-smell-detection**](.claude/skills/performance-smell-detection/) | "check performance", "find slow code" |
+| [**performance-benchmark**](.claude/skills/performance-benchmark/) | "optimize hot path", "JMH benchmark", "performance regression" |
 | [**test-quality**](.claude/skills/test-quality/) | "add tests", "improve coverage" |
 | [**maven-dependency-audit**](.claude/skills/maven-dependency-audit/) | "check dependencies", "audit deps" |
 | [**security-audit**](.claude/skills/security-audit/) | "security review", "check OWASP", "vulnerabilities" |
@@ -105,7 +106,7 @@ claude-code-java/
 ├── LICENSE                      # MIT license
 ├── .gitignore                   # Git ignore rules
 ├── .claude/
-│   └── skills/                  # 18 reusable skills (see Available Skills above)
+│   └── skills/                  # 19 reusable skills (see Available Skills above)
 ├── docs/                        # Guidelines and best practices
 │   ├── DESIGN_PRINCIPLES.md     # Core philosophy
 │   ├── RED_FLAGS.md             # Warning signs to watch for
@@ -153,7 +154,7 @@ Track these to validate effectiveness:
 
 ## What's Included
 
-- 18 skills (workflow, code quality, architecture, frameworks)
+- 19 skills (workflow, code quality, architecture, frameworks)
 - Setup automation scripts
 - Project templates
 - YAML frontmatter for automatic skill detection
