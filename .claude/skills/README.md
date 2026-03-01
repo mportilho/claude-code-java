@@ -47,6 +47,7 @@ Each skill folder contains:
 | [java-migration](java-migration/) | Java version upgrade guide (8→11→17→21) |
 | [jpa-patterns](jpa-patterns/) | JPA/Hibernate patterns (N+1, lazy loading, transactions) |
 | [logging-patterns](logging-patterns/) | Structured logging (JSON), SLF4J, MDC, AI-friendly formats |
+| [antlr-language-architect](antlr-language-architect/) | ANTLR 4 grammar design, optimization, and tree traversal patterns |
 
 ## Adding a New Skill
 

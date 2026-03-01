@@ -57,7 +57,7 @@ claude
 > /java-code-review
 ```
 
-## Available Skills (19)
+## Available Skills (20)
 
 Skills are automatically loaded by Claude Code based on context.
 
@@ -95,6 +95,7 @@ Skills are automatically loaded by Claude Code based on context.
 | [**java-migration**](.claude/skills/java-migration/) | "upgrade to Java 21", "migrate from Java 8" |
 | [**jpa-patterns**](.claude/skills/jpa-patterns/) | "N+1 problem", "LazyInitializationException" |
 | [**logging-patterns**](.claude/skills/logging-patterns/) | "add logging", "debug this flow", "analyze logs" |
+| [**antlr-language-architect**](.claude/skills/antlr-language-architect/) | "create grammar", "ANTLR parser", "AST visitor" |
 
 See [.claude/skills/README.md](.claude/skills/README.md) for full documentation and [docs/SCRIPTS.md](docs/SCRIPTS.md) for setup script options.
 
@@ -106,7 +107,7 @@ claude-code-java/
 ├── LICENSE                      # MIT license
 ├── .gitignore                   # Git ignore rules
 ├── .claude/
-│   └── skills/                  # 19 reusable skills (see Available Skills above)
+│   └── skills/                  # 20 reusable skills (see Available Skills above)
 ├── docs/                        # Guidelines and best practices
 │   ├── DESIGN_PRINCIPLES.md     # Core philosophy
 │   ├── RED_FLAGS.md             # Warning signs to watch for
@@ -154,7 +155,7 @@ Track these to validate effectiveness:
 
 ## What's Included
 
-- 19 skills (workflow, code quality, architecture, frameworks)
+- 20 skills (workflow, code quality, architecture, frameworks)
 - Setup automation scripts
 - Project templates
 - YAML frontmatter for automatic skill detection
