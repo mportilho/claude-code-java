@@ -27,7 +27,7 @@ Write readable, maintainable code following Clean Code principles.
 
 ## DRY - Don't Repeat Yourself
 
-> "Every piece of knowledge must have a single, unambiguous representation in the system."
+> "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system."
 
 ### Violation
 
@@ -108,7 +108,7 @@ public BigDecimal calculateInsuranceCost(Order order) {
 
 ## KISS - Keep It Simple
 
-> "The simplest solution is usually the best."
+> Prefer the simplest solution that satisfies the current requirement.
 
 ### Violation
 
@@ -203,7 +203,7 @@ public interface UserRepository {
 > **"Whenever you see a technical pattern (like a lock, a mandatory log, or a repetitive validation) being applied around an object call in multiple places,
 you have found an opportunity to raise the level of abstraction and move that responsibility inside the object."**
 
-This rule extends **Encapsulation of Concurrent Responsibility** by ensuring that abstractions are responsible for their own structural integrity and technical contracts, never delegating these concerns to the client code.
+This rule reinforces classic encapsulation and information hiding: abstractions should own their technical contracts instead of delegating those concerns to client code.
 
 ### Why it matters:
 1. **API "Correct by Construction"**: The data structure makes it impossible to use incorrectly.
@@ -471,7 +471,7 @@ if (user.hasAdminPrivileges() && action.isAllowedFor(user.getRole())) {
 ```java
 // ❌ BAD
 if (user.getAge() >= 18) { }
-if (order.getTotal() > 100) { }
+if (order.getTotal().compareTo(new BigDecimal("100")) > 0) { }
 Thread.sleep(86400000);
 
 // ✅ GOOD
@@ -572,3 +572,11 @@ When reviewing code, check:
 - `solid-principles` - Design principles for class structure
 - `design-patterns` - Common solutions to recurring problems
 - `java-code-review` - Comprehensive review checklist
+
+---
+
+## References (Official Where Possible)
+
+- [Java SE 11 `String#isBlank()` API](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html#isBlank()) - `isBlank` is available since Java 11.
+- [Java SE `BigDecimal#compareTo(BigDecimal)` API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html#compareTo(java.math.BigDecimal)) - relational comparisons should use `compareTo`.
+- [OpenJDK JEP 395: Records](https://openjdk.org/jeps/395) - records finalized in JDK 16.

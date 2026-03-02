@@ -64,3 +64,6 @@ Clean Code principles with Java examples: DRY, KISS, YAGNI, naming conventions, 
 - [Clean Code by Robert C. Martin](https://www.oreilly.com/library/view/clean-code-a/9780136083238/)
 - [Refactoring by Martin Fowler](https://refactoring.com/)
 - [Refactoring Guru - Code Smells](https://refactoring.guru/refactoring/smells)
+- [Java SE 11 `String#isBlank()` API](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html#isBlank())
+- [Java SE `BigDecimal#compareTo(BigDecimal)` API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html#compareTo(java.math.BigDecimal))
+- [OpenJDK JEP 395: Records](https://openjdk.org/jeps/395)
