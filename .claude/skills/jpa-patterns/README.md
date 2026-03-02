@@ -36,11 +36,12 @@ JPA/Hibernate patterns and common pitfalls for Spring applications. Covers N+1 p
 | Topic | Key Points |
 |-------|------------|
 | **N+1 Problem** | JOIN FETCH, @EntityGraph, @BatchSize |
-| **Lazy Loading** | FetchType.LAZY, LazyInitializationException solutions |
-| **Transactions** | @Transactional, propagation, read-only |
-| **Relationships** | OneToMany, ManyToMany, bidirectional sync |
-| **Optimization** | Pagination, DTO projections, bulk operations |
+| **Lazy Loading** | FetchType.LAZY, LazyInitializationException solutions, OSIV com cautela |
+| **Transactions** | @Transactional, propagation, read-only como hint de otimização |
+| **Relationships** | OneToMany, ManyToMany simples, entidade de ligação (preferida em cenários não triviais) |
+| **Optimization** | Pagination, DTO projections, bulk operations, evitar JOIN FETCH + paginação para coleções |
 | **Locking** | @Version, OptimisticLockException |
+| **Identifiers** | GenerationType.UUID (Jakarta Persistence 3.1+) |
 
 ---
 
@@ -50,6 +51,8 @@ JPA/Hibernate patterns and common pitfalls for Spring applications. Covers N+1 p
 - Missing database indexes
 - toString() triggering lazy loads
 - Calling @Transactional from same class
+- Using direct @ManyToMany in non-trivial relationships
+- Combining collection JOIN FETCH with pagination
 
 ---
 

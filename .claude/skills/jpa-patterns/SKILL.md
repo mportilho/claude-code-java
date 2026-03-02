@@ -22,7 +22,7 @@ Best practices and common pitfalls for JPA/Hibernate in Spring applications.
 | Problem | Symptom | Solution |
 |---------|---------|----------|
 | N+1 queries | Many SELECT statements | JOIN FETCH, @EntityGraph |
-| LazyInitializationException | Error outside transaction | Open Session in View, DTO projection, JOIN FETCH |
+| LazyInitializationException | Error outside transaction | DTO projection, service transaction, JOIN FETCH (OSIV only with caution) |
 | Slow queries | Performance issues | Pagination, projections, indexes |
 | Dirty checking overhead | Slow updates | Read-only transactions, DTOs |
 | Lost updates | Concurrent modifications | Optimistic locking (@Version) |
@@ -123,7 +123,8 @@ spring:
 logging:
   level:
     org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.orm.jdbc.bind: TRACE
+# For older Hibernate versions, BasicBinder may still be used.
 ```
 
 ---
@@ -186,6 +187,7 @@ order.getItems().size();  // 💥 LazyInitializationException!
 @Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.id = :id")
 Optional<Order> findByIdWithItems(@Param("id") Long id);
 ```
+`JOIN FETCH` with collections is great to avoid N+1, but avoid combining it with pagination/limits.
 
 **Solution 2: @Transactional on service method**
 ```java
@@ -236,7 +238,7 @@ spring:
 @Service
 public class OrderService {
 
-    // Read-only: Optimized, no dirty checking
+    // Read-only: optimization hint (provider-dependent), often reduces flush/dirty-check overhead
     @Transactional(readOnly = true)
     public Order findById(Long id) {
         return orderRepository.findById(id).orElseThrow();
@@ -313,20 +315,28 @@ public class OrderService {
     }
 }
 
-// ✅ GOOD: Inject self or use separate service
+// ✅ GOOD: Move transactional method to a separate service
 @Service
 public class OrderService {
 
     @Autowired
-    private OrderService self;  // Or use separate service
+    private OrderWriteService orderWriteService;
 
     public void processOrder(Long id) {
-        self.updateOrder(id);  // Now transaction works
+        orderWriteService.updateOrder(id);
     }
+}
+
+@Service
+public class OrderWriteService {
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     @Transactional
     public void updateOrder(Long id) {
-        // Transaction properly started
+        Order order = orderRepository.findById(id).orElseThrow();
+        // update fields...
     }
 }
 ```
@@ -373,7 +383,7 @@ public class Book {
 ### ManyToMany
 
 ```java
-// ✅ GOOD: ManyToMany with Set (not List) to avoid duplicates
+// ✅ GOOD for simple association tables: ManyToMany with Set (not List)
 @Entity
 public class Student {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -405,6 +415,63 @@ public class Course {
 
     @ManyToMany(mappedBy = "courses")
     private Set<Student> students = new HashSet<>();
+}
+```
+
+### Preferred for Most Cases: Link Entity Instead of Direct ManyToMany
+
+```java
+// ✅ PREFERRED: Model join table as an entity when relationship can evolve
+@Entity
+public class Enrollment {
+    @EmbeddedId
+    private EnrollmentId id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @MapsId("studentId")
+    private Student student;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @MapsId("courseId")
+    private Course course;
+
+    @Column(nullable = false)
+    private LocalDate enrolledOn;
+}
+
+@Embeddable
+public class EnrollmentId implements Serializable {
+    private Long studentId;
+    private Long courseId;
+}
+
+@Entity
+public class Student {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Enrollment> enrollments = new HashSet<>();
+}
+
+@Entity
+public class Course {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Enrollment> enrollments = new HashSet<>();
+}
+```
+
+### Identifier Strategy: UUID (Jakarta Persistence 3.1+)
+
+```java
+@Entity
+public class PurchaseOrder {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 }
 ```
 
@@ -459,6 +526,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 Pageable pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
 Page<Order> orders = orderRepository.findByStatus(OrderStatus.PENDING, pageable);
 ```
+For collection relationships, avoid `JOIN FETCH` + pagination in a single query.
+Prefer paging root IDs first, then fetching associations in a second query.
 
 ### DTO Projections
 
@@ -640,9 +709,11 @@ When reviewing JPA code, check:
 
 - [ ] No N+1 queries (use JOIN FETCH or @EntityGraph)
 - [ ] LAZY fetch by default (especially @ManyToOne)
+- [ ] Avoid JOIN FETCH + pagination for collections
 - [ ] Pagination for large result sets
 - [ ] DTO projections for read-only queries
 - [ ] Bulk operations for batch updates/deletes
+- [ ] Prefer link entity over direct @ManyToMany in non-trivial relationships
 - [ ] @Version for entities with concurrent access
 - [ ] Indexes on frequently queried columns
 - [ ] No lazy fields in toString()
