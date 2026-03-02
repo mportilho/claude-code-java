@@ -87,9 +87,9 @@ com.example.app/
 │   ├── model/
 │   │   └── User.java
 │   ├── port/
-│   │   ├── in/               # Use cases (driven)
+│   │   ├── in/               # Use cases (driving/primary)
 │   │   │   └── CreateUserUseCase.java
-│   │   └── out/              # Repositories (driving)
+│   │   └── out/              # Repositories (driven/secondary)
 │   │       └── UserRepository.java
 │   └── service/
 │       └── UserDomainService.java
@@ -137,7 +137,7 @@ Inner layers MUST NOT know about outer layers.
 package com.example.domain.model;
 
 import org.springframework.data.jpa.repository.JpaRepository;  // Framework leak!
-import javax.persistence.Entity;  // JPA in domain!
+import jakarta.persistence.Entity;  // JPA in domain!
 
 @Entity
 public class User {
@@ -281,7 +281,7 @@ find src/main/java -name "*.java" | xargs dirname | sort | uniq -c | sort -rn | 
 
 # Check for framework imports in domain
 grep -r "import org.springframework" src/main/java/*/domain/ 2>/dev/null
-grep -r "import javax.persistence" src/main/java/*/domain/ 2>/dev/null
+grep -rE "import (jakarta|javax)\\.persistence" src/main/java/*/domain/ 2>/dev/null
 
 # Find circular dependencies (look for bidirectional imports)
 # Check if package A imports from B and B imports from A
