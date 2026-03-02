@@ -1,6 +1,6 @@
 # Concurrency Review Skill
 
-> Review Java concurrent code for thread safety, race conditions, and modern patterns
+> Review Java concurrent code for thread safety, race conditions, and modern patterns (JDK 21 LTS baseline with notes for JDK 24/25)
 
 ## What It Does
 
@@ -14,8 +14,6 @@ Reviews multi-threaded Java code for:
 
 ## Why It Matters
 
-> Nearly 60% of multithreaded applications encounter issues due to improper management of shared resources.
-
 Concurrency bugs are hard to reproduce, hard to test, and hard to debug. Catching them in code review is far better than finding them in production.
 
 ## When to Use
@@ -28,12 +26,12 @@ Concurrency bugs are hard to reproduce, hard to test, and hard to debug. Catchin
 
 ## Key Topics Covered
 
-### Modern Java (21/25)
+### Modern Java (JDK 21 baseline + notes for 24/25)
 | Topic | What to Check |
 |-------|---------------|
 | Virtual Threads | Use for I/O-bound, not CPU-bound |
-| Structured Concurrency | Proper scope management |
-| ScopedValue | Prefer over ThreadLocal |
+| Structured Concurrency | Proper scope management (preview; API differs by JDK) |
+| ScopedValue | Prefer over ThreadLocal for bounded context |
 
 ### Spring @Async
 | Pitfall | Issue |
@@ -68,7 +66,7 @@ Claude: [Checks shared mutable state]
 |-------|---------|
 | 🔴 High | Likely bug - race condition, deadlock risk |
 | 🟡 Medium | Potential issue - measure/verify |
-| 🟢 Modern | Opportunity for Java 21/25 patterns |
+| 🟢 Modern | Opportunity for JDK 21+ modern concurrency patterns |
 
 ## Related Skills
 
@@ -81,6 +79,7 @@ Claude: [Checks shared mutable state]
 - [Java Concurrency Code Review Checklist](https://github.com/code-review-checklists/java-concurrency)
 - [Baeldung - Common Concurrency Pitfalls](https://www.baeldung.com/java-common-concurrency-pitfalls)
 - [Oracle - Virtual Threads](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html)
-- [JavaPro - Java 25 Virtual Threads](https://javapro.io/2025/12/23/java-25-getting-the-most-out-of-virtual-threads-with-structured-task-scopes-and-scoped-values/)
-- [Spring @Async Problems](https://serdaralkancode.medium.com/problems-and-solutions-when-using-async-in-spring-boot-e383f9d3b45d)
+- [OpenJDK JEP 491 - Synchronize Virtual Threads without Pinning](https://openjdk.org/jeps/491)
+- [OpenJDK JEP 505 - Structured Concurrency (Fifth Preview)](https://openjdk.org/jeps/505)
+- [OpenJDK JEP 506 - Scoped Values](https://openjdk.org/jeps/506)
 - Book: "Java Concurrency in Practice" by Brian Goetz

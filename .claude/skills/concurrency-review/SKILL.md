@@ -1,6 +1,6 @@
 ---
 name: concurrency-review
-description: Review Java concurrency code for thread safety, race conditions, deadlocks, and modern patterns (Virtual Threads, CompletableFuture, @Async). Use when user asks "check thread safety", "concurrency review", "async code review", or when reviewing multi-threaded code.
+description: Review Java concurrency code for thread safety, race conditions, deadlocks, and modern patterns with JDK 21 LTS as baseline and notes for JDK 24/25 (Virtual Threads, CompletableFuture, @Async). Use when user asks "check thread safety", "concurrency review", "async code review", or when reviewing multi-threaded code.
 ---
 
 # Concurrency Review Skill
@@ -8,8 +8,6 @@ description: Review Java concurrency code for thread safety, race conditions, de
 Review Java concurrent code for correctness, safety, and modern best practices.
 
 ## Why This Matters
-
-> Nearly 60% of multithreaded applications encounter issues due to improper management of shared resources. - ACM Study
 
 Concurrency bugs are:
 - **Hard to reproduce** - timing-dependent
@@ -27,7 +25,9 @@ This skill helps catch issues **before** they reach production.
 
 ---
 
-## Modern Java (21/25): Virtual Threads
+## Modern Java Baseline: JDK 21 LTS (with notes for JDK 24/25)
+
+### Virtual Threads
 
 ### When to Use Virtual Threads
 
@@ -43,11 +43,11 @@ try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
 // Use platform threads / ForkJoinPool instead
 ```
 
-**Rule of thumb**: If your app never has 10,000+ concurrent tasks, virtual threads may not provide significant benefit.
+**Rule of thumb**: Prefer virtual threads for blocking/I-O-heavy workloads; validate with load tests when throughput/latency is critical.
 
-### Java 25: Synchronized Pinning Fixed
+### JDK 24+: `synchronized` Pinning Mostly Fixed
 
-In Java 21-23, virtual threads became "pinned" when entering `synchronized` blocks with blocking operations. **Java 25 fixes this** (JEP 491).
+In JDK 21-23, virtual threads could be "pinned" when blocking inside `synchronized`. JDK 24 improves this significantly via JEP 491.
 
 ```java
 // In Java 21-23: ⚠️ Could cause pinning
@@ -55,17 +55,19 @@ synchronized (lock) {
     blockingIoCall();  // Virtual thread pinned to carrier
 }
 
-// In Java 25: ✅ No longer an issue
-// But consider ReentrantLock for explicit control anyway
+// In JDK 24+: ✅ Most pinning cases removed
+// Still keep critical sections small and avoid long blocking work while locked
 ```
 
-### ScopedValue Over ThreadLocal
+Remaining pinning situations can still happen (for example, native/FFM callback paths), so monitor with JFR in production-critical flows.
+
+### ScopedValue over ThreadLocal
 
 ```java
-// ❌ ThreadLocal problematic with virtual threads
+// ❌ ThreadLocal can hide context flow and is mutable
 private static final ThreadLocal<User> currentUser = new ThreadLocal<>();
 
-// ✅ ScopedValue (Java 21+ preview, improved in 25)
+// ✅ ScopedValue provides bounded, immutable context propagation
 private static final ScopedValue<User> CURRENT_USER = ScopedValue.newInstance();
 
 ScopedValue.where(CURRENT_USER, user).run(() -> {
@@ -74,20 +76,35 @@ ScopedValue.where(CURRENT_USER, user).run(() -> {
 });
 ```
 
-### Structured Concurrency (Java 25 Preview)
+`ScopedValue` is preview in JDK 21-24 (`--enable-preview`) and finalized in JDK 25 (JEP 506).
+
+### Structured Concurrency (Preview across JDK 21-25)
+
+JDK 21-24 style (constructor-based):
 
 ```java
-// ✅ Structured concurrency - tasks tied to scope lifecycle
+// ✅ Structured concurrency - subtasks tied to lexical scope
 try (StructuredTaskScope.ShutdownOnFailure scope = new StructuredTaskScope.ShutdownOnFailure()) {
-    Subtask<User> userTask = scope.fork(() -> fetchUser(id));
-    Subtask<Orders> ordersTask = scope.fork(() -> fetchOrders(id));
+    StructuredTaskScope.Subtask<User> userTask = scope.fork(() -> fetchUser(id));
+    StructuredTaskScope.Subtask<Orders> ordersTask = scope.fork(() -> fetchOrders(id));
 
     scope.join();            // Wait for all
     scope.throwIfFailed();   // Propagate exceptions
 
     return new Profile(userTask.get(), ordersTask.get());
 }
-// All subtasks automatically cancelled if scope exits
+```
+
+JDK 25 style (factory-based, JEP 505):
+
+```java
+try (var scope = StructuredTaskScope.open()) {
+    StructuredTaskScope.Subtask<User> userTask = scope.fork(() -> fetchUser(id));
+    StructuredTaskScope.Subtask<Orders> ordersTask = scope.fork(() -> fetchOrders(id));
+
+    scope.join();  // Default policy: fail-fast on subtask failure
+    return new Profile(userTask.get(), ordersTask.get());
+}
 ```
 
 ---
@@ -422,30 +439,26 @@ map.compute(key1, (k, v) -> {
 
 ### 🔴 High Severity (Likely Bugs)
 - [ ] No check-then-act on shared state without synchronization
-- [ ] No `synchronized` calling external/unknown code (deadlock risk)
-- [ ] `volatile` present for double-checked locking
-- [ ] Non-volatile fields not read in loops waiting for updates
+- [ ] No blocking/external calls while holding `synchronized`/locks
+- [ ] `volatile` present for double-checked locking and stop flags
 - [ ] `ConcurrentHashMap.compute()` doesn't call other map operations
 - [ ] @Async methods are public and called from different beans
 
 ### 🟡 Medium Severity (Potential Issues)
-- [ ] Thread pools properly sized and named
-- [ ] CompletableFuture exceptions handled (exceptionally/handle)
+- [ ] Thread pools are sized, named, and have a rejection policy
+- [ ] CompletableFuture chains handle exceptions and set timeouts
 - [ ] SecurityContext propagated to async tasks if needed
-- [ ] `ExecutorService` properly shut down
-- [ ] `Lock.unlock()` in finally block
+- [ ] `ExecutorService` shutdown and `Lock.unlock()` in `finally`
 - [ ] Thread-safe collections used for shared data
 
-### 🟢 Modern Patterns (Java 21/25)
-- [ ] Virtual threads used for I/O-bound concurrent tasks
-- [ ] ScopedValue considered over ThreadLocal
-- [ ] Structured concurrency for related subtasks
-- [ ] Timeouts on CompletableFuture operations
+### 🟢 Modern Patterns (JDK 21 baseline + notes for 24/25)
+- [ ] Virtual threads used for I/O-bound tasks (validated with benchmarks)
+- [ ] ScopedValue considered over ThreadLocal for request context
+- [ ] Structured concurrency used for related subtasks/lifecycle control
 
 ### 📝 Documentation
 - [ ] Thread safety documented on shared classes
-- [ ] Locking order documented for nested locks
-- [ ] Each `volatile` usage justified
+- [ ] Locking order and synchronization boundaries documented
 
 ---
 
@@ -453,20 +466,20 @@ map.compute(key1, (k, v) -> {
 
 ```bash
 # Find synchronized blocks
-grep -rn "synchronized" --include="*.java"
+rg -n --glob '*.java' "synchronized" .
 
 # Find @Async methods
-grep -rn "@Async" --include="*.java"
+rg -n --glob '*.java' "@Async" .
 
 # Find volatile fields
-grep -rn "volatile" --include="*.java"
+rg -n --glob '*.java' "volatile" .
 
 # Find thread pool creation
-grep -rn "Executors\.\|ThreadPoolExecutor\|ExecutorService" --include="*.java"
+rg -n --glob '*.java' "Executors\\.|ThreadPoolExecutor|ExecutorService" .
 
 # Find CompletableFuture without error handling
-grep -rn "CompletableFuture\." --include="*.java" | grep -v "exceptionally\|handle\|whenComplete"
+rg -n --glob '*.java' "CompletableFuture\\." . | rg -v "exceptionally|handle|whenComplete|orTimeout|completeOnTimeout"
 
 # Find ThreadLocal (consider ScopedValue in Java 21+)
-grep -rn "ThreadLocal" --include="*.java"
+rg -n --glob '*.java' "ThreadLocal" .
 ```
