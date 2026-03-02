@@ -177,7 +177,7 @@ Note: pf4j uses Fixed → Changed → Added → Removed. Keep a Changelog uses A
 | perf | Changed |
 | refactor | Changed |
 | build(deps) | Changed or Security (if CVE) |
-| BREAKING CHANGE | Changed (with bold note) |
+| BREAKING CHANGE footer or `!` after type/scope | Changed (with bold note) |
 | deprecate | Deprecated |
 
 ## Workflow
@@ -213,8 +213,9 @@ Note: pf4j uses Fixed → Changed → Added → Removed. Keep a Changelog uses A
 6. **Suggest version bump** (based on detected versioning style)
 
    **SemVer (x.y.z):**
-   - BREAKING CHANGE → Major (3.0.0 → 4.0.0)
+   - BREAKING CHANGE (`BREAKING CHANGE:` or `!`) → Major (3.0.0 → 4.0.0)
    - feat → Minor (3.14.0 → 3.15.0)
+   - deprecations in public API → Minor (3.14.0 → 3.15.0)
    - fix only → Patch (3.14.0 → 3.14.1)
 
    **Two-component (x.y):**
@@ -228,7 +229,7 @@ Note: pf4j uses Fixed → Changed → Added → Removed. Keep a Changelog uses A
 ## Token Optimization
 
 - Use `git log --oneline` for initial scan
-- Only fetch full body if BREAKING CHANGE suspected
+- Only fetch full body if `!` marker or BREAKING CHANGE footer is suspected
 - Reuse existing link definitions from file
 - Don't re-read entire changelog - just prepend new section
 
