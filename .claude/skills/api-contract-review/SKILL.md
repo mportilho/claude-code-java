@@ -37,9 +37,10 @@ Audit REST API design for correctness, consistency, and compatibility.
 | POST | Create new resource | No | No | Yes |
 | PUT | Replace entire resource | Yes | No | Yes |
 | PATCH | Partial update | No* | No | Yes |
-| DELETE | Remove resource | Yes | No | Optional |
+| DELETE | Remove resource | Yes | No | Usually none** |
 
 *PATCH can be idempotent depending on implementation
+**RFC 9110: content in DELETE has no generally defined semantics; send only when the origin server explicitly supports it.
 
 ### Common Mistakes
 
@@ -195,8 +196,8 @@ public Page<UserResponse> getUsers(
 | 403 Forbidden | Authenticated but not allowed | Using 401 instead |
 | 404 Not Found | Resource doesn't exist | Using 400 |
 | 409 Conflict | Duplicate, concurrent modification | Using 400 |
-| 422 Unprocessable | Semantic error (valid syntax, invalid meaning) | Using 400 |
-| 500 Internal Error | Unexpected server error | Exposing stack traces |
+| 422 Unprocessable Content | Semantic error (valid syntax, invalid meaning) | Using 400 |
+| 500 Internal Server Error | Unexpected server error | Exposing stack traces |
 
 ### Anti-Pattern: 200 with Error Body
 
@@ -230,27 +231,34 @@ public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
 
 ### Consistent Error Structure
 
+Prefer RFC 9457 Problem Details (`application/problem+json`) when feasible; use a custom envelope only if kept consistent across the API.
+
 ```java
-// ✅ Standard error response
-public class ErrorResponse {
-    private String code;        // Machine-readable: "USER_NOT_FOUND"
-    private String message;     // Human-readable: "User with ID 123 not found"
-    private Instant timestamp;
-    private String path;
-    private List<FieldError> errors;  // For validation errors
+// ✅ RFC 9457 Problem Details (Spring 6+)
+@ExceptionHandler(ResourceNotFoundException.class)
+public ResponseEntity<ProblemDetail> handleNotFound(
+        ResourceNotFoundException ex, HttpServletRequest request) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+    problem.setType(URI.create("https://api.example.com/problems/resource-not-found"));
+    problem.setTitle("Resource not found");
+    problem.setDetail(ex.getMessage());
+    problem.setInstance(URI.create(request.getRequestURI()));
+    problem.setProperty("code", "RESOURCE_NOT_FOUND"); // Extension member
+    return ResponseEntity.status(problem.getStatus()).body(problem);
 }
 
-// In GlobalExceptionHandler
-@ExceptionHandler(ResourceNotFoundException.class)
-public ResponseEntity<ErrorResponse> handleNotFound(
-        ResourceNotFoundException ex, HttpServletRequest request) {
-    return ResponseEntity.status(HttpStatus.NOT_FOUND)
-        .body(ErrorResponse.builder()
-            .code("RESOURCE_NOT_FOUND")
-            .message(ex.getMessage())
-            .timestamp(Instant.now())
-            .path(request.getRequestURI())
-            .build());
+@ExceptionHandler(MethodArgumentNotValidException.class)
+public ResponseEntity<ProblemDetail> handleValidation(
+        MethodArgumentNotValidException ex, HttpServletRequest request) {
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+    problem.setType(URI.create("https://api.example.com/problems/validation-error"));
+    problem.setTitle("Validation failed");
+    problem.setDetail("One or more fields are invalid.");
+    problem.setInstance(URI.create(request.getRequestURI()));
+    problem.setProperty("errors", ex.getBindingResult().getFieldErrors().stream()
+        .map(err -> Map.of("field", err.getField(), "message", err.getDefaultMessage()))
+        .toList());
+    return ResponseEntity.status(problem.getStatus()).body(problem);
 }
 ```
 
@@ -264,12 +272,16 @@ public ResponseEntity<String> handleAll(Exception ex) {
         .body(ex.getStackTrace().toString());  // Security risk!
 }
 
-// ✅ Generic message, log details server-side
+// ✅ Generic message with RFC 9457, log details server-side
 @ExceptionHandler(Exception.class)
-public ResponseEntity<ErrorResponse> handleAll(Exception ex) {
+public ResponseEntity<ProblemDetail> handleAll(Exception ex, HttpServletRequest request) {
     log.error("Unexpected error", ex);  // Full details in logs
-    return ResponseEntity.status(500)
-        .body(ErrorResponse.of("INTERNAL_ERROR", "An unexpected error occurred"));
+    ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
+    problem.setType(URI.create("about:blank"));
+    problem.setTitle("Internal Server Error");
+    problem.setDetail("An unexpected error occurred.");
+    problem.setInstance(URI.create(request.getRequestURI()));
+    return ResponseEntity.status(problem.getStatus()).body(problem);
 }
 ```
 
@@ -376,3 +388,9 @@ For large APIs:
    # Find unversioned APIs
    grep -r "@RequestMapping.*api" --include="*.java" | grep -v "/v[0-9]"
    ```
+
+## Normative References
+
+- [RFC 9110 - HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
+- [RFC 5789 - PATCH Method for HTTP](https://www.rfc-editor.org/rfc/rfc5789)
+- [RFC 9457 - Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)

@@ -67,6 +67,6 @@ Claude: [Checks HTTP verb usage]
 
 ## References
 
-- [REST API Design Best Practices](https://restfulapi.net/)
-- [HTTP Status Codes](https://httpstatuses.com/)
-- [API Versioning](https://www.baeldung.com/rest-versioning)
+- [RFC 9110 - HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
+- [RFC 5789 - PATCH Method for HTTP](https://www.rfc-editor.org/rfc/rfc5789)
+- [RFC 9457 - Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
