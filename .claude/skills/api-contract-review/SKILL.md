@@ -8,60 +8,28 @@ description: Review REST API contracts for HTTP semantics, versioning, backward 
 Audit REST API design for correctness, consistency, and compatibility.
 
 ## When to Use
-- User asks "review this API", "check REST endpoints", "contract review"
-- Before releasing API/controller changes
-- Reviewing PRs that change routes, payloads, status codes, or OpenAPI specs
-- Checking backward compatibility across versions
+- User asks "review this API" / "check REST endpoints"
+- Before releasing API changes
+- Reviewing PR with controller changes
+- Checking backward compatibility
 
 ---
 
-## Standards Baseline (Use as Source of Truth)
+## Quick Reference: Common Issues
 
-- HTTP semantics and status codes: RFC 9110 (June 2022)
-- PATCH behavior: RFC 5789 (March 2010)
-- Problem Details error format: RFC 9457 (July 2023, obsoletes RFC 7807)
-- API contract schema language: OpenAPI Specification (latest published version)
-
-If project conventions conflict with RFC/OpenAPI semantics, flag as **High** and explain with reference section.
-
----
-
-## Quick Reference: High-Value Findings
-
-| Severity | Issue | Symptom | Impact |
-|----------|-------|---------|--------|
-| High | Wrong method semantics | Unsafe action on GET | Side effects, crawler/caching risks |
-| High | Missing versioning | `/users` instead of `/v1/users` | Breaking changes affect all clients |
-| High | Incorrect status semantics | 200 carrying business error | Client retry/error handling breaks |
-| High | Breaking contract change | Removed/renamed response field | Existing clients fail |
-| High | Entity leak | JPA entity in response | Exposes internals, N+1 risk |
-| Medium | Unclear PATCH media type | PATCH without defined patch format | Interop failures |
-| Medium | Missing lifecycle signaling | Deprecated endpoint with no timeline | Migration risk |
-| Low | Naming inconsistency | `/getUsers` vs `/users` | Learnability/consistency issues |
+| Issue | Symptom | Impact |
+|-------|---------|--------|
+| Wrong HTTP verb | POST for idempotent operation | Confusion, caching issues |
+| Missing versioning | `/users` instead of `/v1/users` | Breaking changes affect all clients |
+| Entity leak | JPA entity in response | Exposes internals, N+1 risk |
+| 200 with error | `{"status": 200, "error": "..."}` | Breaks error handling |
+| Inconsistent naming | `/getUsers` vs `/users` | Hard to learn API |
 
 ---
 
-## Review Workflow (Evidence-First)
+## HTTP Verb Semantics
 
-### 1. Map Contract Surface
-- Identify all public endpoints and operation signatures (method + path + request + responses)
-- Identify declared API contract source (OpenAPI file and/or annotations)
-
-### 2. Validate HTTP Semantics
-- Evaluate method safety/idempotency against RFC 9110
-- Validate status code semantics against actual behavior
-- For PATCH, verify media type and patch semantics are explicit (RFC 5789)
-
-### 3. Validate Contract Shape
-- Ensure request/response schemas are explicit (DTO/Schema, not persistence entities)
-- Ensure error payload is standardized (prefer RFC 9457 Problem Details)
-- Check pagination/filter contracts for collection endpoints
-
-### 4. Validate Compatibility and Lifecycle
-- Classify changes as breaking vs non-breaking
-- Check deprecation communication (headers/docs/timeline/migration)
-
-### 5. Verb Selection Guide
+### Verb Selection Guide
 
 | Verb | Use For | Idempotent | Safe | Request Body |
 |------|---------|------------|------|--------------|
@@ -73,22 +41,24 @@ If project conventions conflict with RFC/OpenAPI semantics, flag as **High** and
 
 *PATCH can be idempotent depending on implementation
 
----
-
-## HTTP Method and Body Semantics
+### Common Mistakes
 
 ```java
-// ✅ GET for retrieval (safe, idempotent)
+// ❌ POST for retrieval
+@PostMapping("/users/search")
+public List<User> searchUsers(@RequestBody SearchCriteria criteria) { }
+
+// ✅ GET with query params (or POST only if criteria is very complex)
 @GetMapping("/users")
-public List<UserResponse> listUsers(
+public List<User> searchUsers(
     @RequestParam String name,
     @RequestParam(required = false) String email) { }
 
-// ❌ GET causing state change
+// ❌ GET for state change
 @GetMapping("/users/{id}/activate")
 public void activateUser(@PathVariable Long id) { }
 
-// ✅ Use POST/PATCH/PUT depending on operation semantics
+// ✅ POST or PATCH for state change
 @PostMapping("/users/{id}/activate")
 public ResponseEntity<Void> activateUser(@PathVariable Long id) { }
 
@@ -96,13 +66,12 @@ public ResponseEntity<Void> activateUser(@PathVariable Long id) { }
 @PostMapping("/users/{id}")
 public User updateUser(@PathVariable Long id, @RequestBody UserDto dto) { }
 
-// ✅ PUT full replacement (idempotent)
+// ✅ PUT for full replacement, PATCH for partial
 @PutMapping("/users/{id}")
-public UserResponse replaceUser(@PathVariable Long id, @RequestBody UserReplaceRequest dto) { }
+public User replaceUser(@PathVariable Long id, @RequestBody UserDto dto) { }
 
-// ✅ PATCH partial modification
 @PatchMapping("/users/{id}")
-public UserResponse patchUser(@PathVariable Long id, @RequestBody UserPatchRequest dto) { }
+public User updateUser(@PathVariable Long id, @RequestBody UserPatchDto dto) { }
 ```
 
 ---
@@ -209,26 +178,30 @@ public Page<UserResponse> getUsers(
 
 ## HTTP Status Codes
 
-| Code | Typical Contract Meaning |
-|------|--------------------------|
-| 200 OK | Successful retrieval/update response with body |
-| 201 Created | New resource created; use `Location` for primary resource URI |
-| 202 Accepted | Accepted for async processing |
-| 204 No Content | Success with no response content |
-| 400 Bad Request | Invalid syntax/invalid request framing |
-| 401 Unauthorized | Missing/invalid authentication credentials |
-| 403 Forbidden | Authenticated but not permitted |
-| 404 Not Found | Target resource not found |
-| 409 Conflict | Request conflicts with current resource state (Duplicate, concurrent modification) |
-| 412 Precondition Failed | Conditional request precondition failed |
-| 415 Unsupported Media Type | Request media type unsupported |
-| 422 Unprocessable Content | Syntactically valid content but semantically unprocessable |
-| 500 Internal Server Error | Unexpected server failure |
+### Success Codes
 
-### Anti-Pattern: Success Code for Failure
+| Code | When to Use | Response Body |
+|------|-------------|---------------|
+| 200 OK | Successful GET, PUT, PATCH | Resource or result |
+| 201 Created | Successful POST (created) | Created resource + Location header |
+| 204 No Content | Successful DELETE, or PUT with no body | Empty |
+
+### Error Codes
+
+| Code | When to Use | Common Mistake |
+|------|-------------|----------------|
+| 400 Bad Request | Invalid input, validation failed | Using for "not found" |
+| 401 Unauthorized | Not authenticated | Confusing with 403 |
+| 403 Forbidden | Authenticated but not allowed | Using 401 instead |
+| 404 Not Found | Resource doesn't exist | Using 400 |
+| 409 Conflict | Duplicate, concurrent modification | Using 400 |
+| 422 Unprocessable | Semantic error (valid syntax, invalid meaning) | Using 400 |
+| 500 Internal Error | Unexpected server error | Exposing stack traces |
+
+### Anti-Pattern: 200 with Error Body
 
 ```java
-// ❌ NEVER DO THIS: Returns 200 for domain failure
+// ❌ NEVER DO THIS
 @GetMapping("/{id}")
 public ResponseEntity<Map<String, Object>> getUser(@PathVariable Long id) {
     try {
@@ -242,7 +215,7 @@ public ResponseEntity<Map<String, Object>> getUser(@PathVariable Long id) {
     }
 }
 
-// ✅ Status code matches outcome
+// ✅ Use proper status codes
 @GetMapping("/{id}")
 public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
     return userService.findById(id)
@@ -253,25 +226,31 @@ public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
 
 ---
 
-## Error Contract (Prefer RFC 9457 Problem Details)
+## Error Response Format
 
-Preferred payload members:
-- `type` (problem type URI)
-- `title` (short summary)
-- `status` (HTTP status code; advisory but must match response status)
-- `detail` (human-readable detail)
-- `instance` (resource/problem instance URI)
-
-Spring example:
+### Consistent Error Structure
 
 ```java
+// ✅ Standard error response
+public class ErrorResponse {
+    private String code;        // Machine-readable: "USER_NOT_FOUND"
+    private String message;     // Human-readable: "User with ID 123 not found"
+    private Instant timestamp;
+    private String path;
+    private List<FieldError> errors;  // For validation errors
+}
+
+// In GlobalExceptionHandler
 @ExceptionHandler(ResourceNotFoundException.class)
-public ResponseEntity<ProblemDetail> handleNotFound(ResourceNotFoundException ex) {
-    ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
-    pd.setType(URI.create("https://example.com/problems/resource-not-found"));
-    pd.setTitle("Resource not found");
-    pd.setDetail(ex.getMessage());
-    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(pd);
+public ResponseEntity<ErrorResponse> handleNotFound(
+        ResourceNotFoundException ex, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        .body(ErrorResponse.builder()
+            .code("RESOURCE_NOT_FOUND")
+            .message(ex.getMessage())
+            .timestamp(Instant.now())
+            .path(request.getRequestURI())
+            .build());
 }
 ```
 
@@ -309,10 +288,10 @@ public ResponseEntity<ErrorResponse> handleAll(Exception ex) {
 | Rename field | Yes | Support both temporarily |
 | Change URL path | Yes | Redirect old to new |
 
-### Usually Non-Breaking
+### Non-Breaking Changes (Safe)
 
-- Add optional request field
-- Add new response field (if clients tolerate unknown fields)
+- Add optional field to request
+- Add field to response
 - Add new endpoint
 - Add new optional query parameter
 
@@ -352,28 +331,22 @@ public class UserControllerV1 {
 - [ ] Nouns, not verbs (`/users`, not `/getUsers`)
 - [ ] Plural for collections (`/users`, not `/user`)
 - [ ] Hierarchical for relationships (`/users/{id}/orders`)
-- [ ] Consistent naming, using kebab-case
+- [ ] Consistent naming (kebab-case or camelCase, pick one)
 
 ### 3. Request Handling
-- [ ] Request and response schemas are explicit (DTO/schema-first)
 - [ ] Validation with `@Valid`
 - [ ] Clear error messages for validation failures
-- [ ] No persistence entities leaked directly in public API
+- [ ] Request DTOs (not entities)
 - [ ] Reasonable size limits
-- [ ] Collection endpoints have bounded/paginated contract
 
 ### 4. Response Design
 - [ ] Response DTOs (not entities)
 - [ ] Consistent structure across endpoints
 - [ ] Pagination for collections
 - [ ] Proper status codes (not 200 for errors)
-- [ ] `201` responses include resource location when applicable
-- [ ] `204` responses return no content
-- [ ] Async flows use `202` where appropriate
 
 ### 5. Error Handling
-- [ ] Error payload format is consistent (prefer RFC 9457)
-- [ ] Error payload does not contradict HTTP status
+- [ ] Consistent error format
 - [ ] Machine-readable error codes
 - [ ] Human-readable messages
 - [ ] No stack traces exposed
@@ -403,14 +376,3 @@ For large APIs:
    # Find unversioned APIs
    grep -r "@RequestMapping.*api" --include="*.java" | grep -v "/v[0-9]"
    ```
-
----
-
-## References
-
-- RFC 9110: https://www.rfc-editor.org/rfc/rfc9110
-- RFC 5789: https://www.rfc-editor.org/rfc/rfc5789
-- RFC 9457: https://www.rfc-editor.org/rfc/rfc9457
-- RFC 9745: https://www.rfc-editor.org/rfc/rfc9745
-- RFC 8594: https://www.rfc-editor.org/rfc/rfc8594
-- OpenAPI latest: https://spec.openapis.org/oas/latest.html

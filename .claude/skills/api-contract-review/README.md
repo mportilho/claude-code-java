@@ -5,17 +5,15 @@
 ## What It Does
 
 Reviews REST API design for:
-- HTTP method semantics and status code correctness
+- HTTP verb correctness (GET vs POST vs PUT vs PATCH)
 - API versioning strategy
-- PATCH behavior and media type clarity
 - Request/response structure (DTOs vs entities)
-- Error model consistency (prefer Problem Details)
-- Backward compatibility and lifecycle signaling
+- Status code usage (no 200 with error body)
+- Backward compatibility concerns
 
 ## When to Use
 
 - "Review this API" / "Check REST endpoints"
-- "Review this OpenAPI spec"
 - Before releasing API changes
 - Reviewing controller PRs
 - Checking if API follows REST best practices
@@ -30,11 +28,11 @@ Reviews REST API design for:
 | Templates and examples | Checklist and anti-patterns |
 | Creating new code | Auditing existing code |
 
-### Common Issues Caught (Examples)
+### Common Issues Caught
 
 | Issue | Example |
 |-------|---------|
-| Wrong method semantics | GET endpoint mutates server state or POST for search instead |
+| Wrong verb | POST for search instead of GET |
 | No versioning | `/users` instead of `/v1/users` |
 | Entity leak | JPA entity returned directly |
 | 200 with error | `{"status": "error"}` with HTTP 200 |
@@ -45,11 +43,11 @@ Reviews REST API design for:
 ```
 You: Review the API in UserController
 
-AI Agent: [Checks HTTP verb usage]
-          [Validates versioning]
-          [Looks for entity leaks]
-          [Reviews error handling]
-          [Identifies breaking changes]
+Claude: [Checks HTTP verb usage]
+        [Validates versioning]
+        [Looks for entity leaks]
+        [Reviews error handling]
+        [Identifies breaking changes]
 ```
 
 ## What It Checks
@@ -69,15 +67,6 @@ AI Agent: [Checks HTTP verb usage]
 
 ## References
 
-- [RFC 9110 - HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
-- [RFC 5789 - PATCH Method](https://www.rfc-editor.org/rfc/rfc5789)
-- [RFC 9457 - Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457)
-- [RFC 9745 - Deprecation HTTP Response Header Field](https://www.rfc-editor.org/rfc/rfc9745)
-- [RFC 8594 - The Sunset HTTP Header Field](https://www.rfc-editor.org/rfc/rfc8594)
-- [OpenAPI Specification (latest)](https://spec.openapis.org/oas/latest.html)
-- [RFC 9110 (HTTP Semantics)](https://www.rfc-editor.org/rfc/rfc9110)
-- [RFC 5789 (PATCH)](https://www.rfc-editor.org/rfc/rfc5789)
-- [RFC 9457 (Problem Details)](https://www.rfc-editor.org/rfc/rfc9457)
-- [RFC 9745 (Deprecation Header)](https://www.rfc-editor.org/rfc/rfc9745)
-- [RFC 8594 (Sunset Header)](https://www.rfc-editor.org/rfc/rfc8594)
-- [OpenAPI latest](https://spec.openapis.org/oas/latest.html)
+- [REST API Design Best Practices](https://restfulapi.net/)
+- [HTTP Status Codes](https://httpstatuses.com/)
+- [API Versioning](https://www.baeldung.com/rest-versioning)
