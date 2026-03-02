@@ -29,7 +29,7 @@ Concurrency bugs are hard to reproduce, hard to test, and hard to debug. Catchin
 ### Modern Java (JDK 21 baseline + notes for 24/25)
 | Topic | What to Check |
 |-------|---------------|
-| Virtual Threads | Use for I/O-bound, not CPU-bound |
+| Virtual Threads | Use for I/O-bound; avoid pooling Virtual Threads for throttling (use limiters) |
 | Structured Concurrency | Proper scope management (preview; API differs by JDK) |
 | ScopedValue | Prefer over ThreadLocal for bounded context |
 
@@ -37,8 +37,8 @@ Concurrency bugs are hard to reproduce, hard to test, and hard to debug. Catchin
 | Pitfall | Issue |
 |---------|-------|
 | Same-class call | Bypasses proxy, runs sync |
-| Non-public method | Proxy can't intercept |
-| Default executor | Creates thread per task (OOM risk) |
+| Proxy boundaries | Private/final or local calls bypass async interception |
+| Default executor | Depends on stack (Spring Framework fallback vs Spring Boot auto-config) |
 | SecurityContext | ThreadLocal doesn't propagate |
 
 ### Classic Issues
@@ -76,10 +76,13 @@ Claude: [Checks shared mutable state]
 
 ## References
 
+- [OpenJDK JEP 444 - Virtual Threads](https://openjdk.org/jeps/444)
 - [Java Concurrency Code Review Checklist](https://github.com/code-review-checklists/java-concurrency)
 - [Baeldung - Common Concurrency Pitfalls](https://www.baeldung.com/java-common-concurrency-pitfalls)
 - [Oracle - Virtual Threads](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html)
 - [OpenJDK JEP 491 - Synchronize Virtual Threads without Pinning](https://openjdk.org/jeps/491)
 - [OpenJDK JEP 505 - Structured Concurrency (Fifth Preview)](https://openjdk.org/jeps/505)
 - [OpenJDK JEP 506 - Scoped Values](https://openjdk.org/jeps/506)
+- [Spring Framework `@EnableAsync` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/scheduling/annotation/EnableAsync.html)
+- [Spring Boot Task Execution and Scheduling](https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html)
 - Book: "Java Concurrency in Practice" by Brian Goetz

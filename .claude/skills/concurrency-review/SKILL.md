@@ -45,6 +45,8 @@ try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
 
 **Rule of thumb**: Prefer virtual threads for blocking/I-O-heavy workloads; validate with load tests when throughput/latency is critical.
 
+Do not pool virtual threads to limit concurrency. For backpressure/limits, keep per-task virtual threads and use explicit limiters (for example, `Semaphore`).
+
 ### JDK 24+: `synchronized` Pinning Mostly Fixed
 
 In JDK 21-23, virtual threads could be "pinned" when blocking inside `synchronized`. JDK 24 improves this significantly via JEP 491.
@@ -107,6 +109,8 @@ try (var scope = StructuredTaskScope.open()) {
 }
 ```
 
+Track JDK 26 if your runtime roadmap includes it (`StructuredTaskScope` remains preview and may evolve again).
+
 ---
 
 ## Spring @Async Pitfalls
@@ -154,28 +158,32 @@ public class OrderService {
 }
 ```
 
-### 3. @Async on Non-Public Methods
+### 3. @Async Proxy Boundaries (Visibility and Finality)
 
 ```java
-// ❌ Non-public methods - proxy can't intercept
+// ❌ Private/final methods cannot be advised by Spring proxies
 @Async
 private void processInBackground() { }
 
 @Async
-protected void processInBackground() { }
+public final void processInBackground() { }
 
-// ✅ Must be public
+// ✅ Prefer non-final methods invoked through a Spring bean proxy
 @Async
 public void processInBackground() { }
 ```
 
-### 4. Default Executor Creates Thread Per Task
+`@Async` interception is proxy-based: local calls (same-instance `this.method()`) bypass async behavior. Prefer calling async methods through injected beans.
+
+### 4. Default Executor Behavior Depends on Stack
 
 ```java
-// ❌ Default SimpleAsyncTaskExecutor - creates new thread each time!
-// Can cause OutOfMemoryError under load
+// ⚠️ In plain Spring Framework, if no Executor bean exists,
+// fallback is often SimpleAsyncTaskExecutor (new thread per task).
+// In Spring Boot, default auto-configuration is typically ThreadPoolTaskExecutor
+// (or SimpleAsyncTaskExecutor with virtual threads when enabled).
 
-// ✅ Configure proper thread pool
+// ✅ Configure explicit executor policy for predictability
 @Configuration
 @EnableAsync
 public class AsyncConfig {
@@ -272,8 +280,8 @@ future1.thenCombine(future2, (r1, r2) -> merge(r1, r2));
 ### Use Appropriate Executor
 
 ```java
-// ❌ CPU-bound task in ForkJoinPool.commonPool (default)
-CompletableFuture.supplyAsync(() -> cpuIntensiveWork());
+// ⚠️ Implicit commonPool: no workload isolation or explicit capacity policy
+CompletableFuture.supplyAsync(() -> maybeBlockingCall());
 
 // ✅ Custom executor for blocking/I/O operations
 ExecutorService ioExecutor = Executors.newFixedThreadPool(20);
@@ -282,6 +290,12 @@ CompletableFuture.supplyAsync(() -> blockingIoCall(), ioExecutor);
 // ✅ In Java 21+, virtual threads for I/O
 ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
 CompletableFuture.supplyAsync(() -> blockingIoCall(), virtualExecutor);
+
+// ✅ Dedicated CPU executor for CPU-bound work
+ExecutorService cpuExecutor = Executors.newFixedThreadPool(
+    Runtime.getRuntime().availableProcessors()
+);
+CompletableFuture.supplyAsync(() -> cpuIntensiveWork(), cpuExecutor);
 ```
 
 ---
@@ -427,9 +441,11 @@ if (!map.containsKey(key)) {
 map.putIfAbsent(key, value);
 map.computeIfAbsent(key, k -> createValue());
 
-// ❌ Nested compute can deadlock
+// ❌ Mapping functions must not update this map
+// ConcurrentHashMap may throw IllegalStateException on detectable recursive updates
 map.compute(key1, (k, v) -> {
-    return map.compute(key2, ...);  // Deadlock risk!
+    map.put(key2, otherValue);
+    return v;
 });
 ```
 
@@ -441,8 +457,8 @@ map.compute(key1, (k, v) -> {
 - [ ] No check-then-act on shared state without synchronization
 - [ ] No blocking/external calls while holding `synchronized`/locks
 - [ ] `volatile` present for double-checked locking and stop flags
-- [ ] `ConcurrentHashMap.compute()` doesn't call other map operations
-- [ ] @Async methods are public and called from different beans
+- [ ] `ConcurrentHashMap` mapping functions do not mutate the same map
+- [ ] `@Async` methods are interceptable by proxy and called through beans
 
 ### 🟡 Medium Severity (Potential Issues)
 - [ ] Thread pools are sized, named, and have a rejection policy
