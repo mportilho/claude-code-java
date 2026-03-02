@@ -27,6 +27,7 @@ Practical design patterns reference for Java with modern examples.
 | Ensure single instance | **Singleton** |
 | Convert incompatible interfaces | **Adapter** |
 | Define algorithm skeleton | **Template Method** |
+| Guard remote calls with retry/concurrency limits | **Declarative Resilience (Spring 7+)** |
 
 ---
 
@@ -122,12 +123,14 @@ public class User {
 
 ---
 
-### Factory Method
+### Factory (Simple/Static)
 
 **Use when:** Need to create objects without specifying exact class.
 
+**Note:** This section shows a Simple/Static Factory. The GoF Factory Method variation delegates object creation to subclasses via an overridable factory method.
+
 ```java
-// ✅ Factory Method pattern
+// ✅ Simple/Static Factory pattern
 public interface Notification {
     void send(String message);
 }
@@ -171,7 +174,7 @@ Notification notification = NotificationFactory.create("EMAIL");
 notification.send("Hello!");
 ```
 
-**With Spring (preferred):**
+**With Spring (common in Spring apps):**
 ```java
 public interface NotificationSender {
     void send(String message);
@@ -235,7 +238,7 @@ public enum DatabaseConnection {
 Connection conn = DatabaseConnection.INSTANCE.getConnection();
 ```
 
-**With Spring (preferred):**
+**With Spring (common in Spring apps):**
 ```java
 @Component  // Default scope is singleton
 public class DatabaseConnection {
@@ -348,6 +351,8 @@ cart.setPaymentStrategy(creditCard);
 
 **Use when:** Objects need to be notified of changes in another object.
 
+**Note:** `java.util.Observer` and `java.util.Observable` are deprecated since Java 9. Prefer domain events with listeners (for example, Spring events) or custom observer interfaces.
+
 ```java
 // ✅ Observer pattern (modern Java)
 public interface OrderObserver {
@@ -406,7 +411,7 @@ orderService.addObserver(new EmailNotificationService());
 orderService.addObserver(new AnalyticsService());
 ```
 
-**With Spring Events (preferred):**
+**With Spring Events (common in Spring apps):**
 ```java
 // Event
 public record OrderPlacedEvent(Order order) {}
@@ -527,6 +532,26 @@ csvProcessor.process();
 DataProcessor apiProcessor = new ApiDataProcessor();
 apiProcessor.process();
 ```
+
+---
+
+### Declarative Resilience (Spring 7+)
+
+**Use when:** Need retry, transient-failure handling, and concurrency limits around I/O calls.
+
+```java
+@Service
+public class PaymentGatewayClient {
+
+    @Retryable(maxAttempts = 3)
+    @ConcurrencyLimit(25)
+    public PaymentResult charge(PaymentRequest request) {
+        return remoteGateway.charge(request);
+    }
+}
+```
+
+**Why this is recent:** Spring Framework 7 introduced resilience annotations such as `@Retryable` and `@ConcurrencyLimit` for declarative guardrails around remote calls.
 
 ---
 
@@ -718,6 +743,7 @@ videoPlayer.play("movie.mp4");
 | Integrate with legacy code | Adapter |
 | Common algorithm, varying steps | Template Method |
 | Need single instance | Singleton (use sparingly) |
+| Remote I/O needs retries and concurrency guardrails | Declarative Resilience (Spring 7+) |
 
 ---
 

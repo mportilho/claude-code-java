@@ -34,9 +34,10 @@ Common design patterns with practical Java examples. Covers creational, behavior
 
 | Category | Patterns |
 |----------|----------|
-| **Creational** | Builder, Factory Method, Singleton |
+| **Creational** | Builder, Factory (Simple/Static), Singleton |
 | **Behavioral** | Strategy, Observer, Template Method |
 | **Structural** | Decorator, Adapter |
+| **Cross-cutting** | Declarative Resilience (Spring 7+) |
 
 ---
 
@@ -50,6 +51,7 @@ Common design patterns with practical Java examples. Covers creational, behavior
 | Add behavior dynamically | Decorator |
 | Notify multiple objects | Observer |
 | Integrate legacy code | Adapter |
+| Guard remote calls with retry/limits | Declarative Resilience |
 
 ---
 
@@ -66,3 +68,8 @@ Common design patterns with practical Java examples. Covers creational, behavior
 - [Refactoring Guru - Design Patterns](https://refactoring.guru/design-patterns)
 - [Design Patterns by Gang of Four](https://www.oreilly.com/library/view/design-patterns-elements/0201633612/)
 - [Java Design Patterns (java-design-patterns.com)](https://java-design-patterns.com/)
+- [JDK 25 - Observer (Deprecated)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Observer.html)
+- [JDK 25 - Observable (Deprecated)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Observable.html)
+- [Spring Framework - Bean Scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)
+- [Spring Framework - Application Events](https://docs.spring.io/spring-framework/reference/core/beans/context-introduction.html)
+- [Spring Framework - Resilience Features](https://docs.spring.io/spring-framework/reference/core/resilience.html)
