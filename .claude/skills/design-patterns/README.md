@@ -34,7 +34,7 @@ Common design patterns with practical Java examples. Covers creational, behavior
 
 | Category | Patterns |
 |----------|----------|
-| **Creational** | Builder, Factory (Simple/Static), Singleton |
+| **Creational** | Builder, Factory (Simple/Static), GoF Factory Method variation, Fluent Builder/Factory, Singleton |
 | **Behavioral** | Strategy, Observer, Template Method |
 | **Structural** | Decorator, Adapter |
 | **Cross-cutting** | Declarative Resilience (Spring 7+) |
@@ -47,6 +47,8 @@ Common design patterns with practical Java examples. Covers creational, behavior
 |---------|---------|
 | Many constructor parameters | Builder |
 | Create without specifying class | Factory |
+| Creation varies by subclass/extension | GoF Factory Method variation |
+| Readable chained object creation | Fluent Builder/Factory |
 | Swap algorithms at runtime | Strategy |
 | Add behavior dynamically | Decorator |
 | Notify multiple objects | Observer |

@@ -21,6 +21,7 @@ Practical design patterns reference for Java with modern examples.
 |---------|---------|
 | Complex object construction | **Builder** |
 | Create objects without specifying class | **Factory** |
+| Creation must vary by subtype/extension point | **GoF Factory Method variation** |
 | Multiple algorithms, swap at runtime | **Strategy** |
 | Add behavior without changing class | **Decorator** |
 | Notify multiple objects of changes | **Observer** |
@@ -210,6 +211,48 @@ public class NotificationFactory {
             .orElseThrow(() -> new IllegalArgumentException("Unknown: " + type));
     }
 }
+```
+
+---
+
+### GoF Factory Method variation
+
+**Use when:** The creation step should be customizable by subclasses, while client flow stays stable.
+
+```java
+public interface Button {
+    void render();
+}
+
+public class WindowsButton implements Button {
+    @Override public void render() { System.out.println("Windows button"); }
+}
+
+public class WebButton implements Button {
+    @Override public void render() { System.out.println("Web button"); }
+}
+
+// Creator with factory method
+public abstract class Dialog {
+    protected abstract Button createButton(); // Factory Method
+
+    public void renderDialog() {
+        Button button = createButton();
+        button.render();
+    }
+}
+
+public class WindowsDialog extends Dialog {
+    @Override protected Button createButton() { return new WindowsButton(); }
+}
+
+public class WebDialog extends Dialog {
+    @Override protected Button createButton() { return new WebButton(); }
+}
+
+// Usage
+Dialog dialog = isDesktop ? new WindowsDialog() : new WebDialog();
+dialog.renderDialog();
 ```
 
 ---
@@ -737,6 +780,7 @@ videoPlayer.play("movie.mp4");
 | Situation | Consider |
 |-----------|----------|
 | Object creation is complex | Builder, Factory |
+| Creation must vary by subclass extension points | GoF Factory Method variation |
 | Need to add features dynamically | Decorator |
 | Multiple implementations of algorithm | Strategy |
 | React to state changes | Observer |
