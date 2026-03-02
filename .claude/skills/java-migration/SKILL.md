@@ -31,7 +31,7 @@ Java 8 (LTS) → Java 11 (LTS) → Java 17 (LTS) → Java 21 (LTS) → Java 25 (
 | 8 → 11 | Removed `javax.xml.bind`, module system, internal APIs |
 | 11 → 17 | Sealed classes (preview→final), strong encapsulation |
 | 17 → 21 | Pattern matching changes, `finalize()` deprecated for removal |
-| 21 → 25 | Security Manager removed, Unsafe methods removed, 32-bit dropped |
+| 21 → 25 | Security Manager permanently disabled, 32-bit x86 removed, new warnings for Unsafe memory-access methods and dynamic agents |
 
 ---
 
@@ -97,8 +97,11 @@ mvn test
 ### Step 5: Check Runtime Warnings
 
 ```bash
-# Run with illegal-access warnings
-java --illegal-access=warn -jar app.jar
+# Scan for JDK internals in your artifacts
+jdeps --jdk-internals --recursive target/*.jar
+
+# Scan APIs deprecated for removal
+jdeprscan --release 25 --for-removal target/*.jar
 ```
 
 ---
@@ -302,18 +305,20 @@ ScopedValue.where(CURRENT_USER, user).run(() -> {
 
 | Change | Impact |
 |--------|--------|
-| Security Manager removed | Applications relying on it need alternative security approaches |
-| `sun.misc.Unsafe` methods removed | Use `VarHandle` or FFM API instead |
-| 32-bit platforms dropped | No more x86-32 support |
-| Record pattern variables final | Cannot reassign pattern variables in switch |
+| Security Manager permanently disabled | Enabling it at startup/runtime is no longer supported (JDK 24+) |
+| `sun.misc.Unsafe` memory-access methods terminally deprecated | Runtime warnings in JDK 24+; migrate to `VarHandle`/FFM API |
+| 32-bit x86 port removed | OpenJDK no longer supports 32-bit x86 in JDK 25 |
 | `ScopedValue.orElse(null)` disallowed | Must provide non-null default |
-| Dynamic agents restricted | Requires `-XX:+EnableDynamicAgentLoading` flag |
+| Dynamic agent loading warns by default | Use startup agents (`-javaagent`) or explicit opt-in when required |
 
 ### Check for Unsafe Usage
 
 ```bash
 # Find sun.misc.Unsafe usage
 grep -rn "sun\.misc\.Unsafe" --include="*.java" src/
+
+# Find terminally deprecated APIs in build artifacts
+jdeprscan --release 25 --for-removal target/*.jar
 
 # Find Security Manager usage
 grep -rn "SecurityManager\|System\.getSecurityManager" --include="*.java" src/
@@ -332,48 +337,45 @@ public void handleRequest(User user) {
 }
 
 // Structured Concurrency (Preview, redesigned API in 25)
-try (StructuredTaskScope.ShutdownOnFailure scope = StructuredTaskScope.open()) {
-    Subtask<User> userTask = scope.fork(() -> fetchUser(id));
-    Subtask<Orders> ordersTask = scope.fork(() -> fetchOrders(id));
+try (var scope = StructuredTaskScope.open(StructuredTaskScope.Joiner.awaitAllSuccessfulOrThrow())) {
+    StructuredTaskScope.Subtask<UserAccount> userTask = scope.fork(() -> fetchUser(id));
+    StructuredTaskScope.Subtask<OrderSummary> ordersTask = scope.fork(() -> fetchOrders(id));
 
-    scope.join();
-    scope.throwIfFailed();
-
-    return new Profile(userTask.get(), ordersTask.get());
+    scope.join(); // Throws on failure with this joiner
+    return new CustomerProfile(userTask.get(), ordersTask.get());
 }
 
 // Stable Values (Preview) - lazy initialization made easy
-private static final StableValue<ExpensiveService> SERVICE =
-    StableValue.of(() -> new ExpensiveService());
+private static final StableValue<ExpensiveService> SERVICE = StableValue.of();
 
 public void useService() {
-    SERVICE.get().doWork();  // Initialized on first access, cached thereafter
+    SERVICE.orElseSet(ExpensiveService::new).doWork();  // Initialized on first access
 }
 
-// Compact Object Headers - automatic, no code changes
-// Objects now use 64-bit headers instead of 128-bit (less memory)
+// Compact Object Headers - product feature in Java 25 (opt-in)
+// Enable with: -XX:+UseCompactObjectHeaders
 
 // Primitive Patterns in instanceof (Preview)
 if (obj instanceof int i) {
     System.out.println("int value: " + i);
 }
 
-// Module Import Declarations (Preview)
+// Module Import Declarations (final in Java 25)
 import module java.sql;  // Import all public types from module
 ```
 
-### Performance Improvements (Automatic)
+### Performance-Related Updates
 
-Java 25 includes several automatic performance improvements:
-- **Compact Object Headers**: 8 bytes instead of 16 bytes per object
-- **String.hashCode() constant folding**: Faster Map lookups with String keys
-- **AOT class loading**: Faster startup with ahead-of-time cache
-- **Generational Shenandoah GC**: Better throughput, lower pauses
+Java 25 includes performance-related updates, but not all are enabled by default:
+- **Compact Object Headers** is now a product feature and can be enabled with `-XX:+UseCompactObjectHeaders`.
+- **Unsafe memory-access warnings** (JDK 24+) help identify libraries that still depend on unsupported APIs.
+- Evaluate VM flags and runtime options with workload-specific benchmarks before production rollout.
 
 ### Migration with OpenRewrite
 
 ```bash
 # Automated Java 25 migration
+# Prefer pinning recipe versions in CI; use LATEST for exploratory runs
 mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
   -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-migrate-java:LATEST \
   -Drewrite.activeRecipes=org.openrewrite.java.migrate.UpgradeToJava25
@@ -411,6 +413,7 @@ grep -r "import javax\." --include="*.java" src/ | grep -v "javax.crypto" | grep
 **Automated migration:**
 ```bash
 # Use OpenRewrite
+# Prefer pinning recipe versions in CI; use LATEST for exploratory runs
 mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
   -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:LATEST \
   -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_0
@@ -540,8 +543,11 @@ grep -rn "import javax\." --include="*.java" src/
 # Compile and show first errors
 mvn clean compile 2>&1 | head -100
 
-# Run with verbose module warnings
-java --illegal-access=debug -jar app.jar
+# Find dependencies on JDK internals
+jdeps --jdk-internals --recursive target/*.jar
+
+# Find APIs deprecated for removal
+jdeprscan --release 25 --for-removal target/*.jar
 
 # OpenRewrite Spring Boot 3 migration
 mvn org.openrewrite.maven:rewrite-maven-plugin:run \
@@ -556,14 +562,15 @@ mvn org.openrewrite.maven:rewrite-maven-plugin:run \
 | Framework | Java 8 | Java 11 | Java 17 | Java 21 | Java 25 |
 |-----------|--------|---------|---------|---------|---------|
 | Spring Boot 2.7.x | ✅ | ✅ | ✅ | ⚠️ | ❌ |
-| Spring Boot 3.2.x | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Spring Boot 3.4+ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Spring Boot 3.2.x | ❌ | ❌ | ✅ | ✅ | ❌ |
+| Spring Boot 4.0.x | ❌ | ❌ | ✅ | ✅ | ✅ |
 | Hibernate 5.6 | ✅ | ✅ | ✅ | ⚠️ | ❌ |
 | Hibernate 6.4+ | ❌ | ❌ | ✅ | ✅ | ✅ |
 | JUnit 5.10+ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Mockito 5+ | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Lombok 1.18.34+ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-**LTS Support Timeline:**
-- Java 21: Oracle free support until September 2028
-- Java 25: Oracle free support until September 2033
+**Oracle Java SE Roadmap (commercial support dates):**
+- Java 21 (LTS): Premier Support until September 2028; Extended Support until September 2031
+- Java 25 (LTS): Premier Support until September 2030; Extended Support until September 2033
+
