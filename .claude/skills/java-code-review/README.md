@@ -6,7 +6,7 @@
 
 ## Description
 
-Systematic code review checklist for Java projects. Covers null safety, exception handling, collections, concurrency, idioms, resource management, API design, and performance.
+Systematic code review checklist for Java projects. Covers null safety, exception handling, collections, concurrency, idioms, resource management, API design, and performance, with modern Java 21+ idioms where applicable.
 
 ---
 
@@ -35,7 +35,7 @@ Systematic code review checklist for Java projects. Covers null safety, exceptio
 2. **Exception Handling** - Swallowed exceptions, stack traces
 3. **Collections & Streams** - Iteration, mutability
 4. **Concurrency** - Thread safety, race conditions
-5. **Java Idioms** - equals/hashCode, builders
+5. **Java Idioms** - equals/hashCode, builders, naming, pattern matching
 6. **Resource Management** - try-with-resources
 7. **API Design** - Boolean params, validation
 8. **Performance** - String concat, N+1 queries
@@ -47,3 +47,6 @@ Systematic code review checklist for Java projects. Covers null safety, exceptio
 - Works best on focused changes (single class or PR)
 - Includes positive feedback section for good practices
 - Suggests tests for edge cases found during review
+- Prefer `Optional` mainly for return types; avoid `Optional.get()` in new code
+- Treat `Stream.toList()` as immutable and `Collectors.toList()` mutability as unspecified
+- Avoid acronyms/abbreviations in class names (`CustomerServiceManager` over `CustSvcManager`)

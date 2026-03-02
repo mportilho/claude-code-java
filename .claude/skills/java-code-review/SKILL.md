@@ -62,11 +62,12 @@ return user.getName().toUpperCase();
 **Flags:**
 - Chained method calls without null checks
 - Missing `@Nullable` / `@NonNull` annotations on public APIs
-- `Optional.get()` without `isPresent()` check
+- `Optional.get()` usage in new code (prefer `orElseThrow()`, `orElse(...)`, or `orElseGet(...)`)
 - Returning `null` from methods that could return `Optional` or empty collection
 
 **Suggest:**
 - Use `Optional` for return types that may be absent
+- Avoid `Optional` as fields/parameters; use it mainly at API boundaries (return types)
 - Use `Objects.requireNonNull()` for constructor/method params
 - Return empty collections instead of null: `Collections.emptyList()`
 
@@ -132,14 +133,19 @@ for (Item item : list) {
     System.out.println(item);
 }
 
-// ❌ Collecting to modify
-List<String> names = users.stream()
+// ❌ Collecting with Stream.toList() and then mutating
+List<String> immutableNames = users.stream()
+    .map(User::getName)
+    .toList();
+immutableNames.add("extra");  // UnsupportedOperationException
+
+// ⚠ Collectors.toList() mutability is intentionally unspecified
+List<String> collectedNames = users.stream()
     .map(User::getName)
     .collect(Collectors.toList());
-names.add("extra");  // Might be immutable!
 
-// ✅ Explicit mutable list
-List<String> names = users.stream()
+// ✅ Explicit mutable list when mutation is required
+List<String> mutableNames = users.stream()
     .map(User::getName)
     .collect(Collectors.toCollection(ArrayList::new));
 ```
@@ -147,13 +153,14 @@ List<String> names = users.stream()
 **Flags:**
 - Modifying collections during iteration
 - Overusing streams for simple operations
-- Assuming `Collectors.toList()` returns mutable list
+- Assuming mutability for lists returned by `Stream.toList()` or `Collectors.toList()`
 - Not using `List.of()`, `Set.of()`, `Map.of()` for immutable collections
 - Parallel streams without understanding implications
 
 **Suggest:**
 - `List.copyOf()` for defensive copies
 - `removeIf()` instead of iterator removal
+- Use `Stream.toList()` when immutable result is intended
 - Streams for transformations, loops for side effects
 
 ### 4. Concurrency
@@ -250,12 +257,42 @@ User user = User.builder()
     .build();
 ```
 
+**Pattern Matching (Java 21+):**
+```java
+// ❌ Long instanceof/cast chain
+if (event instanceof UserCreatedEvent) {
+    UserCreatedEvent userCreatedEvent = (UserCreatedEvent) event;
+    handleCreate(userCreatedEvent.user());
+} else if (event instanceof UserDeletedEvent) {
+    UserDeletedEvent userDeletedEvent = (UserDeletedEvent) event;
+    handleDelete(userDeletedEvent.userId());
+}
+
+// ✅ switch pattern matching with record patterns
+switch (event) {
+    case UserCreatedEvent(User user) -> handleCreate(user);
+    case UserDeletedEvent(long userId) -> handleDelete(userId);
+}
+```
+
+**Class Naming:**
+```java
+// ❌ Avoid acronyms/abbreviations in class names
+class CustSvcManager { }
+class XmlCfgLoader { }
+
+// ✅ Prefer descriptive whole words
+class CustomerServiceManager { }
+class XmlConfigurationLoader { }
+```
+
 **Flags:**
 - `equals` without `hashCode`
 - Mutable fields in `hashCode`
 - Missing `toString` on domain objects
 - Constructors with > 3-4 parameters (suggest builder)
-- Not using `instanceof` pattern matching (Java 16+)
+- Long `instanceof`/cast chains that can be simplified with pattern matching (Java 21+)
+- Acronyms/abbreviations in class names (except terms overwhelmingly used in full uppercase, such as URL/HTML)
 
 ### 6. Resource Management
 
@@ -402,7 +439,7 @@ Map<Long, List<Order>> ordersByUser = orderRepo.findByUserIds(userIds);
 | Exceptions | Empty catch, broad catch, lost stack trace |
 | Collections | Modification during iteration, stream vs loop |
 | Concurrency | Shared mutable state, check-then-act |
-| Idioms | equals/hashCode pair, toString, builders |
+| Idioms | equals/hashCode pair, toString, builders, naming, pattern matching |
 | Resources | try-with-resources, connection leaks |
 | API | Boolean params, null handling, validation |
 | Performance | String concat, regex in loop, N+1 |
