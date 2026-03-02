@@ -63,6 +63,11 @@ Claude: [Analyzes package structure]
 
 ## References
 
+- [Java Language Specification 25 - Names (§6.1)](https://docs.oracle.com/javase/specs/jls/se25/html/jls-6.html#jls-6.1)
+- [Java Language Specification 25 - Packages and Modules (Chapter 7)](https://docs.oracle.com/javase/specs/jls/se25/html/jls-7.html)
+- [JEP 261: Module System](https://openjdk.org/jeps/261)
+- [JDK `jdeps` Command Reference](https://docs.oracle.com/en/java/javase/25/docs/specs/man/jdeps.html)
+- [Spring Modulith Reference - Fundamentals](https://docs.spring.io/spring-modulith/reference/fundamentals.html)
 - [Clean Architecture (Uncle Bob)](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
 - [Hexagonal Architecture](https://alistair.cockburn.us/hexagonal-architecture/)
 - [Package by Feature](https://phauer.com/2020/package-by-feature/)

@@ -21,7 +21,7 @@ Analyze project structure at the macro level - packages, modules, layers, and bo
 | Smell | Symptom | Impact |
 |-------|---------|--------|
 | Package-by-layer bloat | `service/` with 50+ classes | Hard to find related code |
-| Domain → Infra dependency | Entity imports `@Repository` | Core logic tied to framework |
+| Domain → Infra dependency | Domain imports Spring/JPA annotations | Core logic tied to framework |
 | Circular dependencies | A → B → C → A | Untestable, fragile |
 | God package | `util/` or `common/` growing | Dump for misplaced code |
 | Leaky abstractions | Controller knows SQL | Layer boundaries violated |
@@ -169,7 +169,7 @@ public interface UserRepository {  // Pure interface, no JPA
 - [ ] Feature packages are cohesive (related code together)
 
 ### 2. Dependency Direction
-- [ ] Domain has ZERO framework imports (Spring, JPA, Jackson)
+- [ ] For clean/hexagonal targets, domain has no framework imports (Spring, JPA, Jackson)
 - [ ] Adapters depend on domain, not vice versa
 - [ ] No circular dependencies between packages
 - [ ] Clear dependency hierarchy
@@ -185,6 +185,7 @@ public interface UserRepository {  // Pure interface, no JPA
 - [ ] Internal classes are package-private
 - [ ] Cross-module communication through interfaces
 - [ ] No "reaching across" modules for internals
+- [ ] If `module-info.java` exists, `exports`/`requires` reflect intended boundaries
 
 ### 5. Scalability Indicators
 - [ ] Could extract a feature to separate service? (microservice-ready)
@@ -280,8 +281,8 @@ find src/main/java -type d | head -30
 find src/main/java -name "*.java" | xargs dirname | sort | uniq -c | sort -rn | head -10
 
 # Check for framework imports in domain
-grep -r "import org.springframework" src/main/java/*/domain/ 2>/dev/null
-grep -rE "import (jakarta|javax)\\.persistence" src/main/java/*/domain/ 2>/dev/null
+rg -n --glob '**/domain/**/*.java' '^import org\.springframework' src/main/java
+rg -n --glob '**/domain/**/*.java' '^import (jakarta|javax)\.persistence' src/main/java
 
 # Find circular dependencies (look for bidirectional imports)
 # Check if package A imports from B and B imports from A
