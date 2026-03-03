@@ -178,7 +178,7 @@ public interface UserRepository {  // Pure interface, no JPA
 - [ ] Controllers don't contain business logic
 - [ ] Services don't know about HTTP (no HttpServletRequest)
 - [ ] Repositories don't leak into controllers
-- [ ] DTOs at boundaries, domain objects inside
+- [ ] Java Records (JDK 14+) used for DTOs at boundaries, domain objects inside
 
 ### 4. Module Boundaries
 - [ ] Each module has clear public API
@@ -254,7 +254,6 @@ public class OrderService {
 package com.example.domain;
 
 @Entity  // JPA
-@Data    // Lombok
 @JsonIgnoreProperties(ignoreUnknown = true)  // Jackson
 public class User {
     @Id @GeneratedValue
@@ -262,6 +261,8 @@ public class User {
 
     @NotBlank  // Validation
     private String email;
+    
+    // Standard getters, setters, and constructors omitted for brevity
 }
 ```
 
