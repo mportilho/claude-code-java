@@ -1,6 +1,6 @@
 ---
 name: logging-patterns
-description: Java logging best practices with SLF4J 2.0+, structured logging (JSON), and context propagation (Micrometer) for request tracing, including virtual threads. Includes AI-friendly log formats for Claude Code debugging. Use when user asks about logging, debugging application flow, or analyzing logs.
+description: Java logging best practices with SLF4J 2.0+, structured logging (JSON), and context propagation (Micrometer) for request tracing, including virtual threads. Includes AI-friendly log formats for IA Agent Code debugging. Use when user asks about logging, debugging application flow, or analyzing logs.
 ---
 
 # Logging Patterns Skill
@@ -13,7 +13,7 @@ Effective logging for Java applications with focus on structured, AI-parsable fo
 - Analyzing application flow from logs
 - Setting up structured logging (JSON)
 - Request tracing with correlation IDs
-- AI/Claude Code needs to analyze application behavior
+- IA Agent needs to analyze application behavior
 
 ---
 
@@ -21,7 +21,7 @@ Effective logging for Java applications with focus on structured, AI-parsable fo
 
 > **Key insight:** JSON logs are better for AI analysis - faster parsing, fewer tokens, direct field access.
 
-### Why JSON for AI/Claude Code?
+### Why JSON for IA Agent?
 
 ```
 # Text format - AI must "interpret" the string
@@ -73,16 +73,16 @@ logging:
 }
 ```
 
-**Key fields for AI debugging:**
+**Key fields for IA Agent debugging:**
 
 - `requestId` - group all logs from same request
 - `step` - track progress through flow
 - `duration_ms` - identify slow operations
 - `level` - quick filter for errors
 
-### Reading Logs with AI/Claude Code
+### Reading Logs with IA Agent
 
-When asking AI to analyze logs:
+When asking IA Agent to analyze logs:
 
 ```bash
 # Get recent errors
@@ -95,7 +95,7 @@ cat app.log | jq 'select(.requestId == "req-abc123")'
 cat app.log | jq 'select(.duration_ms > 1000)'
 ```
 
-AI can then:
+IA Agent can then:
 
 1. Parse JSON directly (no guessing)
 2. Follow request flow via requestId
