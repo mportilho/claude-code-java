@@ -79,6 +79,9 @@ public class UserValidator {
     }
 }
 
+// Java 16+ records naturally enforce single responsibility for immutable data carriers
+public record User(String name, String email) {}
+
 public class UserRepository {
     public User save(User user) {
         entityManager.persist(user);
@@ -89,14 +92,14 @@ public class UserRepository {
 public class WelcomeEmailSender {
     public void sendWelcome(User user) {
         String subject = "Welcome!";
-        String body = "Hello " + user.getName();
-        emailClient.send(user.getEmail(), subject, body);
+        String body = "Hello " + user.name();
+        emailClient.send(user.email(), subject, body);
     }
 }
 
 public class UserAuditLogger {
     public void logCreation(User user) {
-        auditLog.log("User created: " + user.getEmail());
+        auditLog.log("User created: " + user.email());
     }
 }
 
@@ -160,6 +163,7 @@ public class DiscountCalculator {
 
 ```java
 // ✅ GOOD: Add new discounts without modifying existing code
+// Approach 1: Classic OCP using interfaces and polymorphism (Strategy Pattern)
 
 public interface DiscountStrategy {
     double calculate(Order order);
@@ -232,6 +236,30 @@ public class DiscountCalculator {
 }
 ```
 
+```java
+// ✅ GOOD: Modern Java 21+ OCP using Sealed Interfaces + Pattern Matching
+// The hierarchy is closed, but logic handles new extensions gracefully without runtime surprises.
+
+public sealed interface Discount permits Percentage, Fixed, Loyalty, Seasonal {}
+public record Percentage(double rate) implements Discount {}
+public record Fixed(double amount) implements Discount {}
+public record Loyalty(double multiplier) implements Discount {}
+public record Seasonal(double dateMultiplier) implements Discount {}
+
+public class ModernDiscountCalculator {
+    public double calculate(Order order, Discount discount) {
+        // Compiler guarantees exhaustiveness. 
+        // Adding a new record to the "permits" list will cause a compilation error here until handled.
+        return switch (discount) {
+            case Percentage p -> order.getTotal() * p.rate();
+            case Fixed f -> f.amount();
+            case Loyalty l -> order.getTotal() * l.multiplier();
+            case Seasonal s -> order.getTotal() * s.dateMultiplier();
+        };
+    }
+}
+```
+
 ### How to Detect OCP Violations
 
 - `if/else` or `switch` on type/status that grows over time
@@ -242,7 +270,8 @@ public class DiscountCalculator {
 
 | Pattern | Use When |
 |---------|----------|
-| Strategy | Multiple algorithms for same operation |
+| Strategy | Multiple algorithms for same operation (OOP focus) |
+| Sealed Types + Switch | Exhaustive operations decoupled from state (Functional focus, Java 21+) |
 | Template Method | Same structure, different steps |
 | Decorator | Add behavior dynamically |
 | Factory | Create objects without specifying class |
@@ -459,13 +488,7 @@ public interface Repository<T> {
     List<T> findAll();
     T save(T entity);
     void delete(T entity);
-    void deleteById(Long id);
-    List<T> findByExample(T example);
-    Page<T> findAll(Pageable pageable);
-    List<T> findAllById(Iterable<Long> ids);
-    long count();
-    boolean existsById(Long id);
-    // ... 20 more methods
+    // ... many more methods
 }
 
 // ✅ Better: Split by use case
@@ -478,6 +501,10 @@ public interface WriteRepository<T> {
     T save(T entity);
     void delete(T entity);
 }
+
+// Note: Java 8+ 'default' methods provide flexibility. 
+// They allow adding methods to interfaces without breaking existing clients immediately,
+// softening ISP migrations, but shouldn't be used as an excuse for fat interfaces.
 ```
 
 ---
@@ -577,7 +604,8 @@ public class InMemoryOrderRepository implements OrderRepository {
 ### DIP with Spring
 
 ```java
-// Spring handles dependency injection automatically
+// Spring Framework 7 / Spring Boot 4 handles dependency injection automatically
+// By separating the interface from implementation, Native Image compilation (AOT) becomes easier.
 
 @Service
 public class OrderService {
@@ -629,8 +657,8 @@ delegating these concerns to the client code.
 3. **DRY (Technical)**: Technical implementation details are defined once, not scattered around every call site.
 
 ### Application:
-- **Concurrency**: Move `synchronized` / `Lock` inside the data structure.
-- **Validation**: Use **Value Objects** that validate themselves upon construction.
+- **Concurrency**: Move locks inside the data structure, or in modern Java (21+), use `StructuredTaskScope` which neatly ties thread lifecycles and cancellations to a clearly defined scope.
+- **Validation**: Use **Value Objects** (`record`s) that validate themselves upon construction.
 - **Resilience**: Use **Decorators** to handle retries or circuit breakers internally.
 - **Audit**: Use **Proxies** or internal logic to trigger mandatory logging.
 
