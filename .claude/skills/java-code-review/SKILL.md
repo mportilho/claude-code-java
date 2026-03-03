@@ -8,6 +8,7 @@ description: Systematic code review for Java with null safety, exception handlin
 Systematic code review checklist for Java projects.
 
 ## When to Use
+
 - User says "review this code" / "check this PR" / "code review"
 - Before merging a PR
 - After implementing a feature
@@ -24,15 +25,19 @@ Systematic code review checklist for Java projects.
 ## Code Review: [file/feature name]
 
 ### Critical
+
 - [Issue description + line reference + suggestion]
 
 ### Improvements
+
 - [Suggestion + rationale]
 
 ### Minor/Style
+
 - [Nitpicks, optional improvements]
 
 ### Good Practices Observed
+
 - [Positive feedback - important for morale]
 ```
 
@@ -43,6 +48,7 @@ Systematic code review checklist for Java projects.
 ### 1. Null Safety
 
 **Check for:**
+
 ```java
 // ❌ NPE risk
 String name = user.getName().toUpperCase();
@@ -60,12 +66,14 @@ return user.getName().toUpperCase();
 ```
 
 **Flags:**
+
 - Chained method calls without null checks
 - Missing `@Nullable` / `@NonNull` annotations on public APIs
 - `Optional.get()` usage in new code (prefer `orElseThrow()`, `orElse(...)`, or `orElseGet(...)`)
 - Returning `null` from methods that could return `Optional` or empty collection
 
 **Suggest:**
+
 - Use `Optional` for return types that may be absent
 - Avoid `Optional` as fields/parameters; use it mainly at API boundaries (return types)
 - Use `Objects.requireNonNull()` for constructor/method params
@@ -74,6 +82,7 @@ return user.getName().toUpperCase();
 ### 2. Exception Handling
 
 **Check for:**
+
 ```java
 // ❌ Swallowing exceptions
 try {
@@ -96,9 +105,15 @@ catch (IOException e) {
     log.error("Failed to process file: {}", filename, e);
     throw new ProcessingException("File processing failed", e);
 }
+
+// ✅ Unnamed variable for intentionally ignored exception (Java 22+)
+catch (NumberFormatException _) {
+    return 0; // fallback value
+}
 ```
 
 **Flags:**
+
 - Empty catch blocks
 - Catching `Exception` or `Throwable` broadly
 - Losing original exception (not chaining)
@@ -106,6 +121,7 @@ catch (IOException e) {
 - Checked exceptions leaking through API boundaries
 
 **Suggest:**
+
 - Log with context AND stack trace
 - Use specific exception types
 - Chain exceptions with `cause`
@@ -114,6 +130,7 @@ catch (IOException e) {
 ### 3. Collections & Streams
 
 **Check for:**
+
 ```java
 // ❌ Modifying while iterating
 for (Item item : items) {
@@ -148,16 +165,27 @@ List<String> collectedNames = users.stream()
 List<String> mutableNames = users.stream()
     .map(User::getName)
     .collect(Collectors.toCollection(ArrayList::new));
+
+// ❌ Old way to get first/last
+Item first = list.get(0);
+Item last = list.get(list.size() - 1);
+
+// ✅ Sequenced Collections (Java 21+)
+Item first = list.getFirst();
+Item last = list.getLast();
 ```
 
 **Flags:**
+
 - Modifying collections during iteration
 - Overusing streams for simple operations
 - Assuming mutability for lists returned by `Stream.toList()` or `Collectors.toList()`
 - Not using `List.of()`, `Set.of()`, `Map.of()` for immutable collections
 - Parallel streams without understanding implications
+- Using `.get(0)` or `.get(size - 1)` instead of sequenced collection methods
 
 **Suggest:**
+
 - `List.copyOf()` for defensive copies
 - `removeIf()` instead of iterator removal
 - Use `Stream.toList()` when immutable result is intended
@@ -166,6 +194,7 @@ List<String> mutableNames = users.stream()
 ### 4. Concurrency
 
 **Check for:**
+
 ```java
 // ❌ Not thread-safe
 private Map<String, User> cache = new HashMap<>();
@@ -189,16 +218,25 @@ if (instance == null) {
         }
     }
 }
+
+// ❌ Blocking I/O on platform threads (can exhaust pool)
+ExecutorService pool = Executors.newFixedThreadPool(100);
+
+// ✅ Virtual Threads for blocking I/O (Java 21+)
+ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor();
 ```
 
 **Flags:**
+
 - Shared mutable state without synchronization
 - Check-then-act patterns without atomicity
 - Missing `volatile` on shared variables
 - Synchronized on non-final objects
 - Thread-unsafe lazy initialization
+- Using classic thread pools for blocking I/O instead of Virtual Threads
 
 **Suggest:**
+
 - Prefer immutable objects
 - Use `java.util.concurrent` classes
 - `AtomicReference`, `AtomicInteger` for simple cases
@@ -207,6 +245,7 @@ if (instance == null) {
 ### 5. Java Idioms
 
 **equals/hashCode:**
+
 ```java
 // ❌ Only equals without hashCode
 @Override
@@ -234,6 +273,7 @@ public int hashCode() {
 ```
 
 **toString:**
+
 ```java
 // ❌ Missing - hard to debug
 // No toString()
@@ -249,6 +289,7 @@ public String toString() {
 ```
 
 **Builders:**
+
 ```java
 // ✅ For classes with many optional parameters
 User user = User.builder()
@@ -258,6 +299,7 @@ User user = User.builder()
 ```
 
 **Pattern Matching (Java 21+):**
+
 ```java
 // ❌ Long instanceof/cast chain
 if (event instanceof UserCreatedEvent) {
@@ -276,6 +318,7 @@ switch (event) {
 ```
 
 **Class Naming:**
+
 ```java
 // ❌ Avoid acronyms/abbreviations in class names
 class CustSvcManager { }
@@ -287,6 +330,7 @@ class XmlConfigurationLoader { }
 ```
 
 **Flags:**
+
 - `equals` without `hashCode`
 - Mutable fields in `hashCode`
 - Missing `toString` on domain objects
@@ -297,6 +341,7 @@ class XmlConfigurationLoader { }
 ### 6. Resource Management
 
 **Check for:**
+
 ```java
 // ❌ Resource leak
 FileInputStream fis = new FileInputStream(file);
@@ -320,6 +365,7 @@ try (FileWriter fw = new FileWriter(file);
 ```
 
 **Flags:**
+
 - Not using try-with-resources for `Closeable`/`AutoCloseable`
 - Resources opened but not in try-with-resources
 - Database connections/statements not properly closed
@@ -327,6 +373,7 @@ try (FileWriter fw = new FileWriter(file);
 ### 7. API Design
 
 **Check for:**
+
 ```java
 // ❌ Boolean parameters
 process(data, true, false);  // What do these mean?
@@ -356,6 +403,7 @@ public void process(List<Item> items) {
 ```
 
 **Flags:**
+
 - Boolean parameters (prefer enums)
 - Methods with > 3 parameters (consider parameter object)
 - Inconsistent null handling across similar methods
@@ -364,6 +412,7 @@ public void process(List<Item> items) {
 ### 8. Performance Considerations
 
 **Check for:**
+
 ```java
 // ❌ String concatenation in loop
 String result = "";
@@ -398,15 +447,51 @@ Map<Long, List<Order>> ordersByUser = orderRepo.findByUserIds(userIds);
 ```
 
 **Flags:**
+
 - String concatenation in loops
 - Regex compilation in loops
 - N+1 query patterns
 - Creating objects in tight loops that could be reused
 - Not using primitive streams (`IntStream`, `LongStream`)
 
-### 9. Testing Hints
+### 9. Spring Boot & Framework (4.x / 7.x)
+
+**Check for:**
+
+```java
+// ❌ RestTemplate (Maintenance mode)
+RestTemplate restTemplate = new RestTemplate();
+restTemplate.getForObject("/api", String.class);
+
+// ✅ RestClient (Modern fluent API)
+RestClient restClient = RestClient.create();
+restClient.get().uri("/api").retrieve().body(String.class);
+
+// ❌ Raw JdbcTemplate when fluent API is cleaner
+jdbcTemplate.queryForObject("SELECT name FROM users WHERE id = ?", String.class, id);
+
+// ✅ JdbcClient (Fluent database operations)
+jdbcClient.sql("SELECT name FROM users WHERE id = :id")
+    .param("id", id)
+    .query(String.class)
+    .single();
+```
+
+**Flags:**
+
+- Using `RestTemplate` for new HTTP client calls
+- Using `JdbcTemplate` instead of `JdbcClient` for new database operations
+- Using outdated annotations or properties
+
+**Suggest:**
+
+- Use `RestClient` for synchronous HTTP calls
+- Use `JdbcClient` for JDBC operations
+
+### 10. Testing Hints
 
 **Suggest tests for:**
+
 - Null inputs
 - Empty collections
 - Boundary values
@@ -417,12 +502,12 @@ Map<Long, List<Order>> ordersByUser = orderRepo.findByUserIds(userIds);
 
 ## Severity Guidelines
 
-| Severity | Criteria |
-|----------|----------|
-| **Critical** | Security vulnerability, data loss risk, production crash |
-| **High** | Bug likely, significant performance issue, breaks API contract |
-| **Medium** | Code smell, maintainability issue, missing best practice |
-| **Low** | Style, minor optimization, suggestion |
+| Severity     | Criteria                                                       |
+| ------------ | -------------------------------------------------------------- |
+| **Critical** | Security vulnerability, data loss risk, production crash       |
+| **High**     | Bug likely, significant performance issue, breaks API contract |
+| **Medium**   | Code smell, maintainability issue, missing best practice       |
+| **Low**      | Style, minor optimization, suggestion                          |
 
 ## Token Optimization
 
@@ -433,13 +518,14 @@ Map<Long, List<Order>> ordersByUser = orderRepo.findByUserIds(userIds);
 
 ## Quick Reference Card
 
-| Category | Key Checks |
-|----------|------------|
-| Null Safety | Chained calls, Optional misuse, null returns |
-| Exceptions | Empty catch, broad catch, lost stack trace |
-| Collections | Modification during iteration, stream vs loop |
-| Concurrency | Shared mutable state, check-then-act |
-| Idioms | equals/hashCode pair, toString, builders, naming, pattern matching |
-| Resources | try-with-resources, connection leaks |
-| API | Boolean params, null handling, validation |
-| Performance | String concat, regex in loop, N+1 |
+| Category    | Key Checks                                                         |
+| ----------- | ------------------------------------------------------------------ |
+| Null Safety | Chained calls, Optional misuse, null returns                       |
+| Exceptions  | Empty catch, broad catch, lost stack trace                         |
+| Collections | Modification during iteration, stream vs loop                      |
+| Concurrency | Shared mutable state, check-then-act                               |
+| Idioms      | equals/hashCode pair, toString, builders, naming, pattern matching |
+| Resources   | try-with-resources, connection leaks                               |
+| API         | Boolean params, null handling, validation                          |
+| Performance | String concat, regex in loop, N+1                                  |
+| Spring Boot | RestTemplate -> RestClient, JdbcClient usage                       |
