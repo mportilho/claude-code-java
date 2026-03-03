@@ -65,7 +65,7 @@ grep -r "javax\.xml\.bind" --include="*.java" src/
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
     <artifactId>maven-compiler-plugin</artifactId>
-    <version>3.12.1</version>
+    <version>3.13.0</version>
     <configuration>
         <release>21</release>
     </configuration>
@@ -287,9 +287,6 @@ list.addFirst("first");    // new method
 list.addLast("last");      // new method
 list.reversed();           // reversed view
 
-// String templates (preview in 21)
-// May need --enable-preview
-
 // Scoped Values (preview) - replace ThreadLocal
 ScopedValue<User> CURRENT_USER = ScopedValue.newInstance();
 ScopedValue.where(CURRENT_USER, user).run(() -> {
@@ -453,6 +450,29 @@ TypedQuery<User> query = session.createQuery("from User", User.class);
 
 ---
 
+## Spring Boot 3.x → 4.x
+
+**Requirements:**
+- Java 21+ (mandatory)
+- Jakarta EE 11+ (jakarta.* updates)
+
+**Key Changes:**
+- Migration from Spring Framework 6 to 7
+- Removal of deprecated features from 3.x
+- Upgraded dependencies (Hibernate 7.x, Tomcat 11)
+
+**Automated migration:**
+```bash
+# Use OpenRewrite
+# Prefer pinning recipe versions in CI; use LATEST for exploratory runs
+mvn -U org.openrewrite.maven:rewrite-maven-plugin:run \
+  -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:LATEST \
+  -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_4_0
+```
+```
+
+---
+
 ## Common Migration Issues
 
 ### Issue: Reflection Access Denied
@@ -477,17 +497,6 @@ java.lang.ClassNotFoundException: javax.xml.bind.JAXBContext
 
 **Fix:** Add JAXB dependencies (see Java 8→11 section)
 
-### Issue: Lombok Not Working
-
-**Fix:** Update Lombok to latest version:
-```xml
-<dependency>
-    <groupId>org.projectlombok</groupId>
-    <artifactId>lombok</artifactId>
-    <version>1.18.30</version>
-</dependency>
-```
-
 ### Issue: Test Failures with Mockito
 
 **Fix:** Update Mockito:
@@ -495,7 +504,7 @@ java.lang.ClassNotFoundException: javax.xml.bind.JAXBContext
 <dependency>
     <groupId>org.mockito</groupId>
     <artifactId>mockito-core</artifactId>
-    <version>5.8.0</version>
+    <version>5.10.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -516,7 +525,7 @@ java.lang.ClassNotFoundException: javax.xml.bind.JAXBContext
 - [ ] Add missing Jakarta dependencies
 - [ ] Fix `javax.*` → `jakarta.*` imports (if Spring Boot 3)
 - [ ] Add `--add-opens` flags if needed
-- [ ] Update Lombok, Mockito, other tools
+- [ ] Update Mockito, other tools
 - [ ] Fix compilation errors
 - [ ] Run tests
 
@@ -563,12 +572,12 @@ mvn org.openrewrite.maven:rewrite-maven-plugin:run \
 |-----------|--------|---------|---------|---------|---------|
 | Spring Boot 2.7.x | ✅ | ✅ | ✅ | ⚠️ | ❌ |
 | Spring Boot 3.2.x | ❌ | ❌ | ✅ | ✅ | ❌ |
-| Spring Boot 4.0.x | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Spring Boot 4.x | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Hibernate 5.6 | ✅ | ✅ | ✅ | ⚠️ | ❌ |
 | Hibernate 6.4+ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Hibernate 7.x | ❌ | ❌ | ❌ | ✅ | ✅ |
 | JUnit 5.10+ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mockito 5+ | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Lombok 1.18.34+ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Mockito 5.x | ❌ | ✅ | ✅ | ✅ | ✅ |
 
 **Oracle Java SE Roadmap (commercial support dates):**
 - Java 21 (LTS): Premier Support until September 2028; Extended Support until September 2031
