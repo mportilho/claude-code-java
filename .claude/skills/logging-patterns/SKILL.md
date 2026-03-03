@@ -23,7 +23,7 @@ Effective logging for Java applications with focus on structured, AI-parsable fo
 
 ### Why JSON for IA Agent?
 
-```
+```text
 # Text format - AI must "interpret" the string
 2026-01-29 10:15:30 INFO OrderService - Order 12345 created for user-789, total: 99.99
 
@@ -172,7 +172,7 @@ logging:
 <dependency>
     <groupId>net.logstash.logback</groupId>
     <artifactId>logstash-logback-encoder</artifactId>
-    <version>7.4</version>
+    <version>8.0</version>
 </dependency>
 ```
 
@@ -256,13 +256,6 @@ import org.slf4j.LoggerFactory;
 public class OrderService {
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 }
-
-// Or with Lombok
-@Slf4j
-@Service
-public class OrderService {
-    // use `log` directly
-}
 ```
 
 ### Parameterized Logging
@@ -340,7 +333,7 @@ MDC.put("userId", authentication.getName());
 log.info("User action performed");  // {"userId":"john123","message":"User action performed"}
 ```
 
-### Context Propagation with Virtual Threads & Async (Java 25+ / Spring Boot 3.2+ / 4.x)
+### Context Propagation with Virtual Threads & Async (Java 21+ / Spring Boot 3.2+ / 4.x)
 
 MDC `ThreadLocal` context doesn't automatically propagate to new threads (including virtual threads). Modern Spring Boot uses **Micrometer Context Propagation** to handle observability across boundaries seamlessly.
 
@@ -426,6 +419,66 @@ CompletableFuture.runAsync(() -> {
         MDC.clear();
     }
 });
+```
+
+---
+
+## Observability API (Spring Boot 3.2+ / 4.x)
+
+For modern applications, prefer Micrometer's `@Observed` and `ObservationRegistry` over manual MDC manipulation. It automatically handles logs, metrics, traces, and context propagation.
+
+### Using Automatic Observation
+
+```java
+import io.micrometer.observation.annotation.Observed;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
+    // Automatically records metrics, starts a span, and injects traceId into MDC
+    @Observed(name = "order.process", contextualName = "processing-order")
+    public Order processOrder(CreateOrderRequest request) {
+        // Log will automatically include traceId and spanId
+        log.atInfo()
+           .setMessage("Processing started")
+           .addKeyValue("step", "start")
+           .log();
+        return createOrder(request);
+    }
+}
+```
+
+### Manual Observation Scope
+
+If you need programmatic control or to add custom key-values (High Cardinality) to the active trace context:
+
+```java
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+
+@Service
+public class PaymentService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+    private final ObservationRegistry registry;
+
+    public PaymentService(ObservationRegistry registry) {
+        this.registry = registry;
+    }
+
+    public Payment process(Order order) {
+        return Observation.createNotStarted("payment.process", registry)
+            .lowCardinalityKeyValue("payment.method", "card") 
+            .highCardinalityKeyValue("orderId", order.getId()) // Added to MDC/Trace
+            .observe(() -> {
+                log.atInfo().setMessage("Executing payment").log();
+                return executePayment(order);
+            });
+    }
+}
 ```
 
 ---
