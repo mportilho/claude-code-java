@@ -1,11 +1,11 @@
 ---
 name: spring-boot-patterns
-description: Spring Boot best practices and patterns. Use when creating controllers, services, repositories, or when user asks about Spring Boot architecture, REST APIs, exception handling, or JPA patterns.
+description: Spring Boot 4.x / Spring Framework 7.x best practices and patterns (Java 25+). Use when creating controllers, services, repositories, or when user asks about Spring Boot architecture, REST APIs, exception handling, or JPA patterns.
 ---
 
 # Spring Boot Patterns Skill
 
-Best practices and patterns for Spring Boot applications.
+Best practices and patterns for modern Spring Boot applications (Spring Boot 4.x, Java 25+ with JDK 21 compatibility).
 
 ## When to Use
 - User says "create controller" / "add service" / "Spring Boot help"
@@ -50,10 +50,13 @@ src/main/java/com/example/myapp/
 ```java
 @RestController
 @RequestMapping("/api/v1/users")
-@RequiredArgsConstructor  // Lombok for constructor injection
 public class UserController {
 
     private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
 
     @GetMapping
     public ResponseEntity<List<UserResponse>> getAll() {
@@ -119,6 +122,34 @@ public User getById(@PathVariable Long id) {
 
 ---
 
+## HTTP Client Patterns
+
+### RestClient (Modern alternative to RestTemplate)
+```java
+@Service
+public class ExternalApiClient {
+    
+    // Auto-configured by Spring Boot 
+    private final RestClient restClient;
+    
+    public ExternalApiClient(RestClient.Builder restClientBuilder) {
+        this.restClient = restClientBuilder.baseUrl("https://api.example.com").build();
+    }
+    
+    public ExternalData getData(String id) {
+        return restClient.get()
+            .uri("/data/{id}", id)
+            .retrieve()
+            .onStatus(HttpStatusCode::is4xxClientError, (request, response) -> {
+                throw new BusinessException("CLIENT_ERROR", "External API error");
+            })
+            .body(ExternalData.class);
+    }
+}
+```
+
+---
+
 ## Service Patterns
 
 ### Service Interface + Implementation
@@ -134,12 +165,16 @@ public interface UserService {
 
 // Implementation
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)  // Default read-only
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+
+    public UserServiceImpl(UserRepository userRepository, UserMapper userMapper) {
+        this.userRepository = userRepository;
+        this.userMapper = userMapper;
+    }
 
     @Override
     public List<UserResponse> findAll() {
@@ -209,6 +244,28 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Count
     long countByActiveTrue();
+}
+```
+
+### JdbcClient (Modern fluent JDBC API)
+When JPA is overkill or you need complex native queries, use `JdbcClient` over `JdbcTemplate`:
+
+```java
+@Repository
+public class UserJdbcRepository {
+
+    private final JdbcClient jdbcClient;
+
+    public UserJdbcRepository(JdbcClient jdbcClient) {
+        this.jdbcClient = jdbcClient;
+    }
+
+    public Optional<User> findByEmail(String email) {
+        return jdbcClient.sql("SELECT * FROM users WHERE email = :email")
+            .param("email", email)
+            .query(User.class)
+            .optional();
+    }
 }
 ```
 
@@ -292,35 +349,42 @@ public class BusinessException extends RuntimeException {
 ### Global Exception Handler
 ```java
 @RestControllerAdvice
-@Slf4j
 public class GlobalExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(new ErrorResponse("NOT_FOUND", ex.getMessage()));
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Resource Not Found");
+        problem.setProperty("code", "NOT_FOUND");
+        return problem;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(
-            MethodArgumentNotValidException ex) {
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         List<String> errors = ex.getBindingResult().getFieldErrors().stream()
             .map(e -> e.getField() + ": " + e.getDefaultMessage())
             .toList();
-        return ResponseEntity.badRequest()
-            .body(new ErrorResponse("VALIDATION_ERROR", errors.toString()));
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
+        problem.setTitle("Validation Error");
+        problem.setProperty("code", "VALIDATION_ERROR");
+        problem.setProperty("errors", errors);
+        return problem;
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
+    public ProblemDetail handleGeneric(Exception ex) {
         log.error("Unexpected error", ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorResponse("INTERNAL_ERROR", "An unexpected error occurred"));
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
+        problem.setTitle("Internal Server Error");
+        problem.setProperty("code", "INTERNAL_ERROR");
+        return problem;
     }
 }
 
-public record ErrorResponse(String code, String message) {}
+// Spring Boot native ProblemDetail (RFC 7807) replaces custom ErrorResponse classes
 ```
 
 ---
@@ -331,6 +395,9 @@ public record ErrorResponse(String code, String message) {}
 ```yaml
 # application.yml
 spring:
+  threads:
+    virtual:
+      enabled: true     # Enable Java Virtual Threads (Project Loom)
   datasource:
     url: jdbc:postgresql://localhost:5432/mydb
     username: ${DB_USER}
@@ -382,7 +449,6 @@ src/main/resources/
 | `@Service` | Business logic component |
 | `@Repository` | Data access component |
 | `@Configuration` | Configuration class |
-| `@RequiredArgsConstructor` | Lombok: constructor injection |
 | `@Transactional` | Transaction management |
 | `@Valid` | Trigger validation |
 | `@ConfigurationProperties` | Bind properties to class |
