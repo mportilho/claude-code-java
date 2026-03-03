@@ -12,12 +12,13 @@ Audit Maven dependencies for updates, vulnerabilities, and conflicts.
 - Before a release
 - Regular maintenance (monthly recommended)
 - After security advisory
+- During migration to Java 21/25 or Spring Boot 4
 
 ## Audit Workflow
 
 1. **Check for updates** - Find outdated dependencies
 2. **Analyze tree** - Find conflicts and duplicates
-3. **Security scan** - Check for vulnerabilities
+3. **Security scan & SBOM** - Check for vulnerabilities and generate bill of materials
 4. **Report** - Summary with prioritized actions
 
 ---
@@ -32,9 +33,9 @@ mvn versions:display-dependency-updates
 ### Output Analysis
 ```
 [INFO] The following dependencies in Dependencies have newer versions:
-[INFO]   org.slf4j:slf4j-api ......................... 1.7.36 -> 2.0.9
-[INFO]   com.fasterxml.jackson.core:jackson-databind . 2.14.0 -> 2.16.1
-[INFO]   org.junit.jupiter:junit-jupiter ............. 5.9.0 -> 5.10.1
+[INFO]   org.slf4j:slf4j-api ......................... 2.0.9 -> 2.0.16
+[INFO]   com.fasterxml.jackson.core:jackson-databind . 2.16.1 -> 2.21.1
+[INFO]   org.junit.jupiter:junit-jupiter ............. 5.10.1 -> 5.12.0
 ```
 
 ### Categorize Updates
@@ -45,6 +46,9 @@ mvn versions:display-dependency-updates
 | **Major** | x.0.0 change | Review changelog, test thoroughly |
 | **Minor** | x.y.0 change | Usually safe, test |
 | **Patch** | x.y.z change | Safe, minimal testing |
+
+> [!CAUTION]
+> **Spring Boot 4 / Managed Dependencies:** Do **not** manually update versions of transitive dependencies managed by Spring Boot's dependency management (`spring-boot-dependencies` BOM). If a managed dependency is outdated, update the Spring Boot parent version instead to avoid unpredictable compatibility issues. Only manually bump versions if you explicitly need to override a managed version due to a zero-day CVE, and do so specifying the version in `<properties>`.
 
 ### Check Plugin Updates Too
 ```bash
@@ -69,9 +73,9 @@ mvn dependency:tree -Dincludes=org.slf4j
 Look for:
 ```
 [INFO] +- com.example:module-a:jar:1.0:compile
-[INFO] |  \- org.slf4j:slf4j-api:jar:1.7.36:compile
+[INFO] |  \- org.slf4j:slf4j-api:jar:2.0.9:compile
 [INFO] +- com.example:module-b:jar:1.0:compile
-[INFO] |  \- org.slf4j:slf4j-api:jar:2.0.9:compile (omitted for conflict)
+[INFO] |  \- org.slf4j:slf4j-api:jar:2.0.16:compile (omitted for conflict)
 ```
 
 **Flags:**
@@ -87,23 +91,23 @@ mvn dependency:analyze
 Output:
 ```
 [WARNING] Used undeclared dependencies found:
-[WARNING]    org.slf4j:slf4j-api:jar:2.0.9:compile
+[WARNING]    org.slf4j:slf4j-api:jar:2.0.16:compile
 [WARNING] Unused declared dependencies found:
-[WARNING]    commons-io:commons-io:jar:2.11.0:compile
+[WARNING]    commons-io:commons-io:jar:2.15.1:compile
 ```
 
 ---
 
-## 3. Security Vulnerability Scan
+## 3. Security Vulnerability Scan & SBOM
 
-### Option A: OWASP Dependency-Check (Recommended)
+### Option A: OWASP Dependency-Check (Recommended for Vulnerabilities)
 
-Add to pom.xml:
+Add to `pom.xml`:
 ```xml
 <plugin>
     <groupId>org.owasp</groupId>
     <artifactId>dependency-check-maven</artifactId>
-    <version>9.0.7</version>
+    <version>12.2.0</version>
 </plugin>
 ```
 
@@ -114,12 +118,31 @@ mvn dependency-check:check
 
 Output: HTML report in `target/dependency-check-report.html`
 
-### Option B: Maven Dependency Plugin
+### Option B: SBOM Generation (Modern Best Practice)
+
+Always generate a Software Bill of Materials (SBOM) for mature projects, providing transparency for supply chain security.
+
+Add to `pom.xml`:
+```xml
+<plugin>
+    <groupId>org.cyclonedx</groupId>
+    <artifactId>cyclonedx-maven-plugin</artifactId>
+    <version>2.9.1</version>
+</plugin>
+```
+
+Run to generate SBOM:
+```bash
+mvn cyclonedx:makeAggregateBom
+```
+Output: SBOM in `target/bom.json` and `target/bom.xml`.
+
+### Option C: Maven Dependency Plugin
 ```bash
 mvn dependency:analyze-report
 ```
 
-### Option C: GitHub Dependabot
+### Option D: GitHub Dependabot
 If using GitHub, enable Dependabot alerts in repository settings.
 
 ### Severity Levels
@@ -155,24 +178,25 @@ If using GitHub, enable Dependabot alerts in repository settings.
 #### Major Updates (Review Required)
 | Dependency | Current | Latest | Notes |
 |------------|---------|--------|-------|
-| slf4j-api | 1.7.36 | 2.0.9 | API changes, see migration guide |
+| guava | 32.1.3-jre | 33.0.0-jre | Review changelog |
 
 #### Minor/Patch Updates (Safe)
 | Dependency | Current | Latest |
 |------------|---------|--------|
-| junit-jupiter | 5.9.0 | 5.10.1 |
-| jackson-databind | 2.14.0 | 2.16.1 |
+| junit-jupiter | 5.10.1 | 5.12.0 |
+| jackson-databind | 2.16.1 | 2.21.1 |
+| slf4j-api | 2.0.9 | 2.0.16 |
 
 ### Conflicts Detected
-- slf4j-api: 1.7.36 vs 2.0.9 (resolved to 2.0.9)
+- slf4j-api: 2.0.9 vs 2.0.16 (resolved to 2.0.16)
 
 ### Unused Dependencies
-- commons-io:commons-io:2.11.0 (consider removing)
+- commons-io:commons-io:2.15.1 (consider removing)
 
 ### Recommendations
 1. **Immediate:** Update log4j-core to fix CVE-2021-44228
 2. **This sprint:** Update minor/patch versions
-3. **Plan:** Evaluate slf4j 2.x migration
+3. **Security:** Upload generated `sbom.json` to tracking system
 ```
 
 ---
@@ -222,6 +246,9 @@ mvn dependency:tree -Dincludes=commons-logging
     </exclusions>
 </dependency>
 ```
+
+> [!IMPORTANT]
+> **JDK 21/25 Native Plugins:** When targeting modern JDKs like JDK 21 or JDK 25, heavily audit Maven core plugins (e.g., `maven-compiler-plugin`, `maven-surefire-plugin`, `maven-failsafe-plugin`). Outdated plugins may fail to parse or compile modern Java class bytecode versions. Always ensure they are updated to recent releases.
 
 ---
 
