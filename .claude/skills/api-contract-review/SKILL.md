@@ -65,14 +65,14 @@ public ResponseEntity<Void> activateUser(@PathVariable Long id) { }
 
 // ❌ POST for idempotent update
 @PostMapping("/users/{id}")
-public User updateUser(@PathVariable Long id, @RequestBody UserDto dto) { }
+public UserResponse updateUser(@PathVariable Long id, @RequestBody UserRequest request) { }
 
 // ✅ PUT for full replacement, PATCH for partial
 @PutMapping("/users/{id}")
-public User replaceUser(@PathVariable Long id, @RequestBody UserDto dto) { }
+public UserResponse replaceUser(@PathVariable Long id, @RequestBody UserRequest request) { }
 
 @PatchMapping("/users/{id}")
-public User updateUser(@PathVariable Long id, @RequestBody UserPatchDto dto) { }
+public UserResponse updateUser(@PathVariable Long id, @RequestBody UserPatchRequest request) { }
 ```
 
 ---
@@ -114,7 +114,7 @@ public class UserController { }
 
 ## Request/Response Design
 
-### DTO vs Entity
+### DTO vs Entity (Use Java Records)
 
 ```java
 // ❌ Entity in response (leaks internals)
@@ -124,11 +124,11 @@ public User getUser(@PathVariable Long id) {
     // Exposes: password hash, internal IDs, lazy collections
 }
 
-// ✅ DTO response
+// ✅ DTO response (using Java Record)
 @GetMapping("/{id}")
 public UserResponse getUser(@PathVariable Long id) {
     User user = userService.findById(id);
-    return UserResponse.from(user);  // Only public fields
+    return new UserResponse(user.getId(), user.getName());  // Only public fields
 }
 ```
 
@@ -166,12 +166,14 @@ public List<User> getAllUsers() {
     return userRepository.findAll();  // Could be millions
 }
 
-// ✅ Paginated
+// ✅ Keyset Pagination (Scroll API - Spring Data 3.2+, recommended for large datasets)
 @GetMapping("/users")
-public Page<UserResponse> getUsers(
-    @RequestParam(defaultValue = "0") int page,
-    @RequestParam(defaultValue = "20") int size) {
-    return userService.findAll(PageRequest.of(page, size));
+public Window<UserResponse> getUsers(
+    @RequestParam(required = false) Map<String, Object> keyset,
+    @RequestParam(defaultValue = "20") int limit) {
+    
+    ScrollPosition position = keyset != null ? ScrollPosition.keyset(keyset) : ScrollPosition.keyset();
+    return userService.findAllUsers(position, Limit.of(limit));
 }
 ```
 
@@ -220,6 +222,7 @@ public ResponseEntity<Map<String, Object>> getUser(@PathVariable Long id) {
 @GetMapping("/{id}")
 public ResponseEntity<UserResponse> getUser(@PathVariable Long id) {
     return userService.findById(id)
+        .map(user -> new UserResponse(user.getId(), user.getName()))
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.notFound().build());
 }
@@ -272,10 +275,12 @@ public ResponseEntity<String> handleAll(Exception ex) {
         .body(ex.getStackTrace().toString());  // Security risk!
 }
 
-// ✅ Generic message with RFC 9457, log details server-side
+// ✅ Generic message with RFC 9457, log details server-side (use org.slf4j.Logger)
+private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
 @ExceptionHandler(Exception.class)
 public ResponseEntity<ProblemDetail> handleAll(Exception ex, HttpServletRequest request) {
-    log.error("Unexpected error", ex);  // Full details in logs
+    logger.error("Unexpected error", ex);  // Full details in logs
     ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.INTERNAL_SERVER_ERROR);
     problem.setType(URI.create("about:blank"));
     problem.setTitle("Internal Server Error");
@@ -348,17 +353,17 @@ public class UserControllerV1 {
 ### 3. Request Handling
 - [ ] Validation with `@Valid`
 - [ ] Clear error messages for validation failures
-- [ ] Request DTOs (not entities)
+- [ ] Request models (e.g., Records for DTOs, not entities)
 - [ ] Reasonable size limits
 
 ### 4. Response Design
-- [ ] Response DTOs (not entities)
+- [ ] Response models (e.g., Records for DTOs, not entities)
 - [ ] Consistent structure across endpoints
-- [ ] Pagination for collections
+- [ ] Keyset Pagination for collections (or offset if dataset is small)
 - [ ] Proper status codes (not 200 for errors)
 
 ### 5. Error Handling
-- [ ] Consistent error format
+- [ ] Consistent error format (Prefer RFC 9457 ProblemDetail)
 - [ ] Machine-readable error codes
 - [ ] Human-readable messages
 - [ ] No stack traces exposed
