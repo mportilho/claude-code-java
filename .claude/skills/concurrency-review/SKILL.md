@@ -1,6 +1,6 @@
 ---
 name: concurrency-review
-description: Review Java concurrency code for thread safety, race conditions, deadlocks, and modern patterns with JDK 21 LTS as baseline and notes for JDK 24/25 (Virtual Threads, CompletableFuture, @Async). Use when user asks "check thread safety", "concurrency review", "async code review", or when reviewing multi-threaded code.
+description: Review Java concurrency code for thread safety, race conditions, deadlocks, and modern patterns. Uses JDK 21 LTS as baseline with JDK 24/25 notes (Virtual Threads, CompletableFuture, @Async). Request via "check thread safety", "concurrency review".
 ---
 
 # Concurrency Review Skill
@@ -10,6 +10,7 @@ Review Java concurrent code for correctness, safety, and modern best practices.
 ## Why This Matters
 
 Concurrency bugs are:
+
 - **Hard to reproduce** - timing-dependent
 - **Hard to test** - may only appear under load
 - **Hard to debug** - non-deterministic behavior
@@ -17,6 +18,7 @@ Concurrency bugs are:
 This skill helps catch issues **before** they reach production.
 
 ## When to Use
+
 - Reviewing code with `synchronized`, `volatile`, `Lock`
 - Checking `@Async`, `CompletableFuture`, `ExecutorService`
 - Validating thread safety of shared state
@@ -43,13 +45,16 @@ try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
 // Use platform threads / ForkJoinPool instead
 ```
 
-**Rule of thumb**: Prefer virtual threads for blocking/I-O-heavy workloads; validate with load tests when throughput/latency is critical.
+**Rule of thumb**: Prefer virtual threads for blocking/I-O-heavy workloads;
+validate with load tests when throughput/latency is critical.
 
-Do not pool virtual threads to limit concurrency. For backpressure/limits, keep per-task virtual threads and use explicit limiters (for example, `Semaphore`).
+Do not pool virtual threads to limit concurrency. For backpressure/limits,
+keep per-task virtual threads and use explicit limiters (like `Semaphore`).
 
 ### JDK 24+: `synchronized` Pinning Mostly Fixed
 
-In JDK 21-23, virtual threads could be "pinned" when blocking inside `synchronized`. JDK 24 improves this significantly via JEP 491.
+In JDK 21-23, virtual threads could be "pinned" when blocking
+inside `synchronized`. JDK 24 improves this significantly via JEP 491.
 
 ```java
 // In Java 21-23: ⚠️ Could cause pinning
@@ -61,7 +66,8 @@ synchronized (lock) {
 // Still keep critical sections small and avoid long blocking work while locked
 ```
 
-Remaining pinning situations can still happen (for example, native/FFM callback paths), so monitor with JFR in production-critical flows.
+Remaining pinning situations can still happen (e.g. native/FFM callback paths),
+so monitor with JFR in production-critical flows.
 
 ### ScopedValue over ThreadLocal
 
@@ -78,7 +84,7 @@ ScopedValue.where(CURRENT_USER, user).run(() -> {
 });
 ```
 
-`ScopedValue` is preview in JDK 21-24 (`--enable-preview`) and finalized in JDK 25 (JEP 506).
+`ScopedValue` is preview in JDK 21-24 and finalized in JDK 25 (JEP 506).
 
 ### Structured Concurrency (Preview across JDK 21-25)
 
@@ -86,9 +92,10 @@ JDK 21-24 style (constructor-based):
 
 ```java
 // ✅ Structured concurrency - subtasks tied to lexical scope
-try (StructuredTaskScope.ShutdownOnFailure scope = new StructuredTaskScope.ShutdownOnFailure()) {
+try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
     StructuredTaskScope.Subtask<User> userTask = scope.fork(() -> fetchUser(id));
-    StructuredTaskScope.Subtask<Orders> ordersTask = scope.fork(() -> fetchOrders(id));
+    StructuredTaskScope.Subtask<Orders> ordersTask =
+        scope.fork(() -> fetchOrders(id));
 
     scope.join();            // Wait for all
     scope.throwIfFailed();   // Propagate exceptions
@@ -109,7 +116,8 @@ try (var scope = StructuredTaskScope.open()) {
 }
 ```
 
-Track JDK 26 if your runtime roadmap includes it (`StructuredTaskScope` remains preview and may evolve again).
+Track JDK 26 if your runtime roadmap includes it (`StructuredTaskScope`
+remains preview and may evolve again).
 
 ---
 
@@ -173,52 +181,61 @@ public final void processInBackground() { }
 public void processInBackground() { }
 ```
 
-`@Async` interception is proxy-based: local calls (same-instance `this.method()`) bypass async behavior. Prefer calling async methods through injected beans.
+`@Async` interception is proxy-based: local calls (same-instance
+`this.method()`) bypass async behavior. Call via injected beans.
 
 ### 4. Default Executor Behavior Depends on Stack
 
 ```java
 // ⚠️ In plain Spring Framework, if no Executor bean exists,
 // fallback is often SimpleAsyncTaskExecutor (new thread per task).
-// In Spring Boot, default auto-configuration is typically ThreadPoolTaskExecutor
-// (or SimpleAsyncTaskExecutor with virtual threads when enabled).
+// In Spring Boot earlier than 3.2, default auto-configuration was ThreadPoolTaskExecutor.
 
-// ✅ Configure explicit executor policy for predictability
+// ✅ In Spring Boot 4 (and 3.2+), the modern approach is to enable virtual threads.
+// This auto-configures a task executor optimized for I/O bounds automatically.
+// In your application.properties / .yml:
+// spring.threads.virtual.enabled=true
+
+// ✅ If explicitly needing custom thread pool policy for CPU bounds (non-virtual):
 @Configuration
 @EnableAsync
 public class AsyncConfig {
 
-    @Bean
+    @Bean("cpuBoundTaskExecutor")
     public Executor taskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(10);
-        executor.setMaxPoolSize(50);
+        executor.setCorePoolSize(Runtime.getRuntime().availableProcessors());
+        executor.setMaxPoolSize(Runtime.getRuntime().availableProcessors() * 2);
         executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("async-");
-        executor.setRejectedExecutionHandler(new CallerRunsPolicy());
+        executor.setThreadNamePrefix("cpu-async-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }
 }
 ```
 
-### 5. SecurityContext Not Propagating
+### 5. Context Propagation (Security, Logging, Tracing)
 
 ```java
-// ❌ SecurityContextHolder is ThreadLocal-bound
+// ❌ SecurityContextHolder / MDC are ThreadLocal-bound
 @Async
 public void auditAction() {
     // SecurityContextHolder.getContext() is NULL here!
     String user = SecurityContextHolder.getContext().getAuthentication().getName();
 }
 
-// ✅ Use DelegatingSecurityContextAsyncTaskExecutor
-@Bean
-public Executor taskExecutor() {
-    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    // ... configure ...
-    return new DelegatingSecurityContextAsyncTaskExecutor(executor);
+// ✅ Use Micrometer Context Propagation with Spring Boot 4 / Framework 7+
+// Spring Boot auto-configures context propagation for @Async and Observability 
+// when spring.threads.virtual.enabled=true or context propagation is on the classpath.
+@Async
+public void auditAction() {
+    // Context is automatically propagated by Spring's modern abstractions!
+    String user = SecurityContextHolder.getContext().getAuthentication().getName();
 }
+
+// ✅ Legacy workaround (Spring Security 5.x / older versions):
+// Return new DelegatingSecurityContextAsyncTaskExecutor(executor);
 ```
 
 ---
@@ -228,6 +245,9 @@ public Executor taskExecutor() {
 ### Error Handling
 
 ```java
+// Assuming a standard SLF4J Logger setup:
+// private static final Logger logger = LoggerFactory.getLogger(MyClass.class);
+
 // ❌ Exception silently swallowed
 CompletableFuture.supplyAsync(() -> riskyOperation());
 // If riskyOperation throws, nobody knows
@@ -235,7 +255,7 @@ CompletableFuture.supplyAsync(() -> riskyOperation());
 // ✅ Always handle exceptions
 CompletableFuture.supplyAsync(() -> riskyOperation())
     .exceptionally(ex -> {
-        log.error("Operation failed", ex);
+        logger.error("Operation failed", ex);
         return fallbackValue;
     });
 
@@ -243,7 +263,7 @@ CompletableFuture.supplyAsync(() -> riskyOperation())
 CompletableFuture.supplyAsync(() -> riskyOperation())
     .handle((result, ex) -> {
         if (ex != null) {
-            log.error("Failed", ex);
+            logger.error("Failed", ex);
             return fallbackValue;
         }
         return result;
@@ -267,11 +287,11 @@ CompletableFuture.supplyAsync(() -> slowOperation())
 ```java
 // ✅ Wait for all
 CompletableFuture.allOf(future1, future2, future3)
-    .thenRun(() -> log.info("All completed"));
+    .thenRun(() -> logger.info("All completed"));
 
 // ✅ Wait for first
 CompletableFuture.anyOf(future1, future2, future3)
-    .thenAccept(result -> log.info("First result: {}", result));
+    .thenAccept(result -> logger.info("First result: {}", result));
 
 // ✅ Combine results
 future1.thenCombine(future2, (r1, r2) -> merge(r1, r2));
@@ -423,7 +443,7 @@ public void transfer(Account from, Account to, int amount) {
 ### Choose the Right Collection
 
 | Use Case | Wrong | Right |
-|----------|-------|-------|
+| :--- | :--- | :--- |
 | Concurrent reads/writes | `HashMap` | `ConcurrentHashMap` |
 | Frequent iteration | `ConcurrentHashMap` | `CopyOnWriteArrayList` |
 | Producer-consumer | `ArrayList` | `BlockingQueue` |
@@ -454,6 +474,7 @@ map.compute(key1, (k, v) -> {
 ## Concurrency Review Checklist
 
 ### 🔴 High Severity (Likely Bugs)
+
 - [ ] No check-then-act on shared state without synchronization
 - [ ] No blocking/external calls while holding `synchronized`/locks
 - [ ] `volatile` present for double-checked locking and stop flags
@@ -461,18 +482,21 @@ map.compute(key1, (k, v) -> {
 - [ ] `@Async` methods are interceptable by proxy and called through beans
 
 ### 🟡 Medium Severity (Potential Issues)
+
 - [ ] Thread pools are sized, named, and have a rejection policy
 - [ ] CompletableFuture chains handle exceptions and set timeouts
-- [ ] SecurityContext propagated to async tasks if needed
+- [ ] Context Propagated (Micrometer) enabled for Security/Tracing in async
 - [ ] `ExecutorService` shutdown and `Lock.unlock()` in `finally`
 - [ ] Thread-safe collections used for shared data
 
 ### 🟢 Modern Patterns (JDK 21 baseline + notes for 24/25)
-- [ ] Virtual threads used for I/O-bound tasks (validated with benchmarks)
+
+- [ ] Virtual threads used for I/O tasks (validated via Boot 4 auto config)
 - [ ] ScopedValue considered over ThreadLocal for request context
 - [ ] Structured concurrency used for related subtasks/lifecycle control
 
 ### 📝 Documentation
+
 - [ ] Thread safety documented on shared classes
 - [ ] Locking order and synchronization boundaries documented
 
