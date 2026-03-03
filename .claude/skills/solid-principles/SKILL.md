@@ -8,6 +8,7 @@ description: SOLID principles checklist with Java examples. Use when reviewing c
 Review and apply SOLID principles in Java code.
 
 ## When to Use
+
 - User says "check SOLID" / "SOLID review" / "is this class doing too much?"
 - Reviewing class design
 - Refactoring large classes
@@ -61,6 +62,7 @@ public class UserService {
 ```
 
 **Problems:**
+
 - Validation changes? Modify UserService
 - Email template changes? Modify UserService
 - Audit format changes? Modify UserService
@@ -391,6 +393,8 @@ if (bird instanceof Penguin) {
 }
 ```
 
+> **💡 Pro-tip:** Java 14+ `record`s are implicitly final, which makes them immune to inheritance-based LSP violations. Favor them for data carriers to naturally enforce composition over inheritance!
+
 ---
 
 ## I - Interface Segregation Principle (ISP)
@@ -534,6 +538,7 @@ public class OrderService {
 ```
 
 **Problems:**
+
 - Cannot test without real MySQL database
 - Cannot swap email provider
 - OrderService knows about MySQL, SMTP details
@@ -641,6 +646,24 @@ public class MockEmailSender implements NotificationSender { }
 - Cannot easily swap implementations
 - Tests require real infrastructure (database, network)
 
+### Architectural DIP with Java Modules (JPMS)
+
+The Java Module System (Java 9+) can enforce DIP at the compiler and runtime levels by strictly controlling what is exposed.
+
+```java
+module my.application.core {
+    // 1. Export ONLY the abstractions (interfaces)
+    exports com.myapp.core.ports;
+    
+    // 2. Hide implementations completely
+    // (com.myapp.core.adapters package is NOT exported)
+    
+    // 3. Declare that this module provides an implementation for the interface
+    provides com.myapp.core.ports.OrderRepository 
+        with com.myapp.core.adapters.MySqlOrderRepository;
+}
+```
+
 ---
 
 ## Master Rule: Encapsulation of Technical Constraints
@@ -651,12 +674,14 @@ you have found an opportunity to raise the level of abstraction and move that re
 This rule extends **SRP** and **DIP** by ensuring that abstractions are responsible for their own structural integrity and technical contracts, never
 delegating these concerns to the client code.
 
-### Why it matters:
+### Why it matters
+
 1. **API "Correct by Construction"**: The data structure makes it impossible to use incorrectly.
 2. **Reduced Cognitive Load**: Clients focus on "What" (business intent) instead of "How" (technical mechanics like locking).
 3. **DRY (Technical)**: Technical implementation details are defined once, not scattered around every call site.
 
-### Application:
+### Application
+
 - **Concurrency**: Move locks inside the data structure, or in modern Java (21+), use `StructuredTaskScope` which neatly ties thread lifecycles and cancellations to a clearly defined scope.
 - **Validation**: Use **Value Objects** (`record`s) that validate themselves upon construction.
 - **Resilience**: Use **Decorators** to handle retries or circuit breakers internally.
