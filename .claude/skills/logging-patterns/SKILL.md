@@ -1,6 +1,6 @@
 ---
 name: logging-patterns
-description: Java logging best practices with SLF4J, structured logging (JSON), and MDC for request tracing. Includes AI-friendly log formats for Claude Code debugging. Use when user asks about logging, debugging application flow, or analyzing logs.
+description: Java logging best practices with SLF4J 2.0+, structured logging (JSON), and context propagation (Micrometer) for request tracing, including virtual threads. Includes AI-friendly log formats for Claude Code debugging. Use when user asks about logging, debugging application flow, or analyzing logs.
 ---
 
 # Logging Patterns Skill
@@ -8,6 +8,7 @@ description: Java logging best practices with SLF4J, structured logging (JSON), 
 Effective logging for Java applications with focus on structured, AI-parsable formats.
 
 ## When to Use
+
 - User says "add logging" / "improve logs" / "debug this"
 - Analyzing application flow from logs
 - Setting up structured logging (JSON)
@@ -30,12 +31,12 @@ Effective logging for Java applications with focus on structured, AI-parsable fo
 {"timestamp":"2026-01-29T10:15:30Z","level":"INFO","orderId":12345,"userId":"user-789","total":99.99}
 ```
 
-| Aspect | Text | JSON |
-|--------|------|------|
-| Parsing | Regex/interpretation | Direct field access |
-| Token usage | Higher (repeated patterns) | Lower (structured) |
-| Error extraction | Parse stack trace text | `exception` field |
-| Filtering | grep patterns | `jq` queries |
+| Aspect           | Text                       | JSON                |
+| ---------------- | -------------------------- | ------------------- |
+| Parsing          | Regex/interpretation       | Direct field access |
+| Token usage      | Higher (repeated patterns) | Lower (structured)  |
+| Error extraction | Parse stack trace text     | `exception` field   |
+| Filtering        | grep patterns              | `jq` queries        |
 
 ### Recommended Setup for AI-Assisted Development
 
@@ -44,7 +45,8 @@ Effective logging for Java applications with focus on structured, AI-parsable fo
 logging:
   structured:
     format:
-      console: logstash  # Spring Boot 3.4+
+      console: logstash # Spring Boot 3.4+
+
 
 # When YOU need to read logs manually:
 # Option 1: Use jq
@@ -72,6 +74,7 @@ logging:
 ```
 
 **Key fields for AI debugging:**
+
 - `requestId` - group all logs from same request
 - `step` - track progress through flow
 - `duration_ms` - identify slow operations
@@ -93,6 +96,7 @@ cat app.log | jq 'select(.duration_ms > 1000)'
 ```
 
 AI can then:
+
 1. Parse JSON directly (no guessing)
 2. Follow request flow via requestId
 3. Identify exactly where errors occurred
@@ -100,18 +104,19 @@ AI can then:
 
 ---
 
-## Quick Setup (Spring Boot 3.4+)
+## Quick Setup (Spring Boot 3.4+ / 4.x)
 
 ### Native Structured Logging
 
-Spring Boot 3.4+ has built-in support - no extra dependencies!
+Spring Boot 3.4+ and 4.x have built-in support - no extra dependencies!
 
 ```yaml
 # application.yml
 logging:
   structured:
     format:
-      console: logstash    # or "ecs" for Elastic Common Schema
+      console: logstash # or "ecs" for Elastic Common Schema
+
 
 # Supported formats: logstash, ecs, gelf
 ```
@@ -146,6 +151,7 @@ logging:
 ```
 
 **Usage:**
+
 ```bash
 # Default: JSON (for AI, CI/CD, production)
 ./mvnw spring-boot:run
@@ -161,6 +167,7 @@ logging:
 ### Logstash Logback Encoder
 
 **pom.xml:**
+
 ```xml
 <dependency>
     <groupId>net.logstash.logback</groupId>
@@ -170,6 +177,7 @@ logging:
 ```
 
 **logback-spring.xml:**
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
@@ -202,21 +210,36 @@ logging:
 </configuration>
 ```
 
-### Adding Custom Fields (Logstash Encoder)
+### Adding Custom Fields
+
+**Modern Java (SLF4J 2.0+ Fluent API):**
+_No extra dependencies required. Standard with Spring Boot 3+ / 4.x_
+
+```java
+// Fields appear as separate JSON keys in structured logs
+log.atInfo()
+   .setMessage("Order created")
+   .addKeyValue("orderId", order.getId())
+   .addKeyValue("userId", user.getId())
+   .addKeyValue("total", order.getTotal())
+   .addKeyValue("step", "order_created")
+   .log();
+
+// Output:
+// {"message":"Order created","orderId":123,"userId":"u-456","total":99.99,"step":"order_created"}
+```
+
+**Legacy (Logstash Encoder pre-SLF4J 2.0):**
 
 ```java
 import static net.logstash.logback.argument.StructuredArguments.kv;
 
-// Fields appear as separate JSON keys
 log.info("Order created",
     kv("orderId", order.getId()),
     kv("userId", user.getId()),
     kv("total", order.getTotal()),
     kv("step", "order_created")
 );
-
-// Output:
-// {"message":"Order created","orderId":123,"userId":"u-456","total":99.99,"step":"order_created"}
 ```
 
 ---
@@ -252,28 +275,26 @@ log.debug("Processing order {} for user {}", orderId, userId);
 log.debug("Processing order " + orderId + " for user " + userId);
 
 // ✅ For expensive operations
-if (log.isDebugEnabled()) {
-    log.debug("Full order details: {}", order.toJson());
-}
+log.atDebug().log(() -> "Full order details: " + order.toJson());
 ```
 
 ---
 
 ## Log Levels
 
-| Level | When | Example |
-|-------|------|---------|
-| **ERROR** | Failures needing attention | Unhandled exception, service down |
-| **WARN** | Unexpected but handled | Retry succeeded, deprecated API used |
-| **INFO** | Business events | Order created, payment processed |
-| **DEBUG** | Technical details | Method params, SQL queries |
-| **TRACE** | Very detailed | Loop iterations (rarely used) |
+| Level     | When                       | Example                              |
+| --------- | -------------------------- | ------------------------------------ |
+| **ERROR** | Failures needing attention | Unhandled exception, service down    |
+| **WARN**  | Unexpected but handled     | Retry succeeded, deprecated API used |
+| **INFO**  | Business events            | Order created, payment processed     |
+| **DEBUG** | Technical details          | Method params, SQL queries           |
+| **TRACE** | Very detailed              | Loop iterations (rarely used)        |
 
 ```java
-log.error("Payment failed", kv("orderId", id), kv("reason", reason), exception);
-log.warn("Retry succeeded", kv("attempt", 3), kv("orderId", id));
-log.info("Order shipped", kv("orderId", id), kv("trackingNumber", tracking));
-log.debug("Fetching from DB", kv("query", "findById"), kv("id", id));
+log.atError().setMessage("Payment failed").addKeyValue("orderId", id).addKeyValue("reason", reason).setCause(exception).log();
+log.atWarn().setMessage("Retry succeeded").addKeyValue("attempt", 3).addKeyValue("orderId", id).log();
+log.atInfo().setMessage("Order shipped").addKeyValue("orderId", id).addKeyValue("trackingNumber", tracking).log();
+log.atDebug().setMessage("Fetching from DB").addKeyValue("query", "findById").addKeyValue("id", id).log();
 ```
 
 ---
@@ -319,18 +340,39 @@ MDC.put("userId", authentication.getName());
 log.info("User action performed");  // {"userId":"john123","message":"User action performed"}
 ```
 
-### MDC in Async Operations
+### Context Propagation with Virtual Threads (Java 25+ / Spring Boot 3.2+)
+
+MDC `ThreadLocal` context doesn't automatically propagate to new threads (including virtual threads). Modern Spring Boot uses **Micrometer Context Propagation**.
 
 ```java
-// MDC doesn't auto-propagate to new threads!
+import io.micrometer.context.ContextSnapshotFactory;
+// ...
 
-// ✅ Copy MDC context
+// ✅ Modern pattern: Wrap the task with context before submitting to an executor (or using @Async)
+Runnable task = () -> {
+    log.info("Async task running"); // Has requestId, userId
+};
+
+// Capture context from current thread
+Runnable wrappedTask = ContextSnapshotFactory.builder().build().captureAll().wrap(task);
+
+// Run on virtual threads
+Executors.newVirtualThreadPerTaskExecutor().submit(wrappedTask);
+
+// Alternatively, configure Spring's TaskExecutor to automatically propagate:
+// spring.threads.virtual.enabled=true
+// and use @Async
+```
+
+**Legacy pattern (Manual MDC copy):**
+
+```java
+// ⚠️ Manual copying is error-prone. Avoid in modern apps.
 Map<String, String> context = MDC.getCopyOfContextMap();
-
 CompletableFuture.runAsync(() -> {
     try {
         if (context != null) MDC.setContextMap(context);
-        log.info("Async task running");  // Has requestId, userId
+        log.info("Async task running");
     } finally {
         MDC.clear();
     }
@@ -345,18 +387,22 @@ CompletableFuture.runAsync(() -> {
 
 ```java
 // Include key identifiers and state
-log.info("Order created",
-    kv("orderId", id),
-    kv("userId", userId),
-    kv("total", total),
-    kv("itemCount", items.size()),
-    kv("step", "order_created"));
+log.atInfo()
+   .setMessage("Order created")
+   .addKeyValue("orderId", id)
+   .addKeyValue("userId", userId)
+   .addKeyValue("total", total)
+   .addKeyValue("itemCount", items.size())
+   .addKeyValue("step", "order_created")
+   .log();
 
-log.info("Payment processed",
-    kv("orderId", id),
-    kv("amount", amount),
-    kv("method", "card"),
-    kv("step", "payment_completed"));
+log.atInfo()
+   .setMessage("Payment processed")
+   .addKeyValue("orderId", id)
+   .addKeyValue("amount", amount)
+   .addKeyValue("method", "card")
+   .addKeyValue("step", "payment_completed")
+   .log();
 ```
 
 ### External Calls (with timing)
@@ -365,17 +411,21 @@ log.info("Payment processed",
 long start = System.currentTimeMillis();
 try {
     Result result = externalService.call(params);
-    log.info("External call succeeded",
-        kv("service", "PaymentGateway"),
-        kv("operation", "charge"),
-        kv("duration_ms", System.currentTimeMillis() - start));
+    log.atInfo()
+       .setMessage("External call succeeded")
+       .addKeyValue("service", "PaymentGateway")
+       .addKeyValue("operation", "charge")
+       .addKeyValue("duration_ms", System.currentTimeMillis() - start)
+       .log();
     return result;
 } catch (Exception e) {
-    log.error("External call failed",
-        kv("service", "PaymentGateway"),
-        kv("operation", "charge"),
-        kv("duration_ms", System.currentTimeMillis() - start),
-        e);
+    log.atError()
+       .setMessage("External call failed")
+       .addKeyValue("service", "PaymentGateway")
+       .addKeyValue("operation", "charge")
+       .addKeyValue("duration_ms", System.currentTimeMillis() - start)
+       .setCause(e)
+       .log();
     throw e;
 }
 ```
@@ -384,18 +434,18 @@ try {
 
 ```java
 public Order processOrder(CreateOrderRequest request) {
-    log.info("Processing started", kv("step", "start"), kv("requestData", request.summary()));
+    log.atInfo().setMessage("Processing started").addKeyValue("step", "start").addKeyValue("requestData", request.summary()).log();
 
     Order order = createOrder(request);
-    log.info("Order created", kv("step", "order_created"), kv("orderId", order.getId()));
+    log.atInfo().setMessage("Order created").addKeyValue("step", "order_created").addKeyValue("orderId", order.getId()).log();
 
     validateInventory(order);
-    log.info("Inventory validated", kv("step", "inventory_ok"), kv("orderId", order.getId()));
+    log.atInfo().setMessage("Inventory validated").addKeyValue("step", "inventory_ok").addKeyValue("orderId", order.getId()).log();
 
     processPayment(order);
-    log.info("Payment processed", kv("step", "payment_done"), kv("orderId", order.getId()));
+    log.atInfo().setMessage("Payment processed").addKeyValue("step", "payment_done").addKeyValue("orderId", order.getId()).log();
 
-    log.info("Processing completed", kv("step", "complete"), kv("orderId", order.getId()));
+    log.atInfo().setMessage("Processing completed").addKeyValue("step", "complete").addKeyValue("orderId", order.getId()).log();
     return order;
 }
 ```
@@ -406,15 +456,15 @@ public Order processOrder(CreateOrderRequest request) {
 
 ```java
 // ❌ NEVER log sensitive data
-log.info("Login", kv("password", password));           // Passwords
-log.info("Payment", kv("cardNumber", card));           // Full card numbers
-log.info("Request", kv("token", jwtToken));            // Tokens
-log.info("User", kv("ssn", socialSecurity));           // PII
+log.atInfo().setMessage("Login").addKeyValue("password", password).log();           // Passwords
+log.atInfo().setMessage("Payment").addKeyValue("cardNumber", card).log();           // Full card numbers
+log.atInfo().setMessage("Request").addKeyValue("token", jwtToken).log();            // Tokens
+log.atInfo().setMessage("User").addKeyValue("ssn", socialSecurity).log();           // PII
 
 // ✅ Safe alternatives
-log.info("Login attempted", kv("userId", userId));
-log.info("Payment", kv("cardLast4", last4));
-log.info("Token validated", kv("subject", sub), kv("exp", expiry));
+log.atInfo().setMessage("Login attempted").addKeyValue("userId", userId).log();
+log.atInfo().setMessage("Payment").addKeyValue("cardLast4", last4).log();
+log.atInfo().setMessage("Token validated").addKeyValue("subject", sub).addKeyValue("exp", expiry).log();
 ```
 
 ---
@@ -440,11 +490,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handle(Exception e, HttpServletRequest request) {
-        log.error("Request failed",
-            kv("path", request.getRequestURI()),
-            kv("method", request.getMethod()),
-            kv("errorType", e.getClass().getSimpleName()),
-            e);  // Full stack trace
+        log.atError()
+           .setMessage("Request failed")
+           .addKeyValue("path", request.getRequestURI())
+           .addKeyValue("method", request.getMethod())
+           .addKeyValue("errorType", e.getClass().getSimpleName())
+           .setCause(e)
+           .log();  // Full stack trace
         return ResponseEntity.status(500).body(errorResponse);
     }
 }
@@ -457,12 +509,14 @@ public class GlobalExceptionHandler {
 log.error("Error occurred", e);
 
 // ✅ Useful for debugging
-log.error("Order processing failed",
-    kv("orderId", orderId),
-    kv("step", "payment"),
-    kv("userId", userId),
-    kv("attemptNumber", attempt),
-    e);
+log.atError()
+   .setMessage("Order processing failed")
+   .addKeyValue("orderId", orderId)
+   .addKeyValue("step", "payment")
+   .addKeyValue("userId", userId)
+   .addKeyValue("attemptNumber", attempt)
+   .setCause(e)
+   .log();
 ```
 
 ---
@@ -473,11 +527,18 @@ log.error("Order processing failed",
 // === Setup ===
 private static final Logger log = LoggerFactory.getLogger(MyClass.class);
 
-// === Logging with structured fields ===
-import static net.logstash.logback.argument.StructuredArguments.kv;
+// === Logging with structured fields (SLF4J 2 API) ===
+log.atInfo()
+   .setMessage("Event")
+   .addKeyValue("key1", value1)
+   .addKeyValue("key2", value2)
+   .log();
 
-log.info("Event", kv("key1", value1), kv("key2", value2));
-log.error("Failed", kv("context", ctx), exception);
+log.atError()
+   .setMessage("Failed")
+   .addKeyValue("context", ctx)
+   .setCause(exception)
+   .log();
 
 // === MDC ===
 MDC.put("requestId", requestId);
