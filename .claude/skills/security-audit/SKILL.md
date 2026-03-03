@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Java security checklist covering OWASP Top 10, input validation, injection prevention, and secure coding. Works with Spring, Quarkus, Jakarta EE, and plain Java. Use when reviewing code security, before releases, or when user asks about vulnerabilities.
+description: Java security checklist covering OWASP Top 10, input validation, injection prevention, and secure coding. Works with Spring Boot 3/4, Quarkus, Jakarta EE, and plain Java. Use when an AI Agent or user checks for code security vulnerabilities, or before releases.
 ---
 
 # Security Audit Skill
@@ -10,7 +10,7 @@ Security checklist for Java applications based on OWASP Top 10 and secure coding
 ## When to Use
 - Security code review
 - Before production releases
-- User asks about "security", "vulnerability", "OWASP"
+- AI Agent or user asks about "security", "vulnerability", "OWASP"
 - Reviewing authentication/authorization code
 - Checking for injection vulnerabilities
 
@@ -35,9 +35,9 @@ Security checklist for Java applications based on OWASP Top 10 and secure coding
 
 ## Input Validation (All Frameworks)
 
-### Bean Validation (JSR 380)
+### Jakarta Validation (Jakarta EE 10+)
 
-Works in Spring, Quarkus, Jakarta EE, and standalone.
+Works in modern Spring Boot 3/4, Quarkus, Jakarta EE 10+, and standalone. Make sure to use `jakarta.validation` instead of legacy `javax.validation`.
 
 ```java
 // ✅ GOOD: Validate at boundary
@@ -195,7 +195,7 @@ String safeUrl = Encode.forUriComponent(userInput);
 <dependency>
     <groupId>org.owasp.encoder</groupId>
     <artifactId>encoder</artifactId>
-    <version>1.2.3</version>
+    <version>1.4.0</version>
 </dependency>
 ```
 
@@ -286,7 +286,9 @@ String hash = encoder.encode(rawPassword);
 boolean matches = encoder.matches(rawPassword, hash);
 
 // Argon2 (recommended for new projects)
+// Spring Security 7 supports both built-in Argon2 and Argon2Password4jPasswordEncoder
 PasswordEncoder encoder = Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+// Alternatively: PasswordEncoder encoder = new Argon2Password4jPasswordEncoder();
 String hash = encoder.encode(rawPassword);
 
 // ❌ BAD: MD5, SHA1, SHA256 without salt
@@ -443,7 +445,7 @@ public class JacksonConfig {
 <plugin>
     <groupId>org.owasp</groupId>
     <artifactId>dependency-check-maven</artifactId>
-    <version>9.0.7</version>
+    <version>12.2.0</version>
     <executions>
         <execution>
             <goals>
