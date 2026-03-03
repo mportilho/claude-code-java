@@ -24,8 +24,8 @@ Hibernate 7.x applications, optimized for modern Java (JDK 21/25).
 | Problem | Symptom | Solution |
 | --- | --- | --- |
 | N+1 queries | Many SELECT statements | JOIN FETCH, @EntityGraph |
-| LazyInitializationException | Error | DTO projection, service transaction, JOIN FETCH |
-| Slow queries | Performance issues | Pagination, projections, indexes |
+| LazyInitializationException | Error | DTO projection, service tx, JOIN FETCH |
+| Slow | Perf | Pagination |
 | Dirty checking overhead | Slow updates | Read-only transactions, DTOs |
 | Lost updates | Concurrent modifications | Optimistic locking (@Version) |
 
@@ -463,7 +463,7 @@ public class Student {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "student", cascade = CascadeType.ALL)
     private Set<Enrollment> enrollments = new HashSet<>();
 }
 
@@ -501,15 +501,23 @@ public class PurchaseOrder {
 
 ### equals() and hashCode() for Entities
 
+Implementing `equals()` and `hashCode()` for JPA entities is tricky because of
+database-generated IDs and Hibernate Proxies.
+
+#### 1. Using a Natural / Business Key
+
+If your entity has a unique, immutable business key, this is the easiest and
+safest approach.
+
 ```java
-// ✅ GOOD: Use business key or ID carefully
+// ✅ GOOD: Use an immutable business key (Natural ID)
 @Entity
 public class Book {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @NaturalId  // Hibernate annotation for business key
-    @Column(unique = true, nullable = false)
+    @Column(unique = true, nullable = false, updatable = false)
     private String isbn;
 
     @Override
@@ -521,7 +529,57 @@ public class Book {
 
     @Override
     public int hashCode() {
-        return Objects.hash(isbn);  // Use business key, not ID
+        return Objects.hash(isbn);
+    }
+}
+```
+
+#### 2. Using a DB-Generated ID
+
+When using a DB-generated ID (`@GeneratedValue`), the ID is `null` before
+persistence. Also, Hibernate wraps entities in proxies (`HibernateProxy`),
+which breaks standard `instanceof` and `getClass()` comparisons.
+
+To fix this, we must compare the *effective class* (unwrapping the proxy if
+present) and use a constant hash code (so the hash bucket doesn't change
+after persistence).
+
+```java
+// ✅ GOOD: Robust equals/hashCode for DB-generated IDs
+@Entity
+public class PurchaseOrder {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null) return false;
+        
+        // Unwrap proxy to get the real entity class
+        Class<?> oEffectiveClass = o instanceof HibernateProxy 
+            ? ((HibernateProxy) o).getHibernateLazyInitializer()
+                .getPersistentClass() 
+            : o.getClass();
+        Class<?> thisEffectiveClass = this instanceof HibernateProxy 
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+                .getPersistentClass() 
+            : this.getClass();
+            
+        if (thisEffectiveClass != oEffectiveClass) return false;
+        
+        PurchaseOrder other = (PurchaseOrder) o;
+        return getId() != null && Objects.equals(getId(), other.getId());
+    }
+
+    @Override
+    public final int hashCode() {
+        // Keeps hash code consistent before and after persistence
+        return this instanceof HibernateProxy 
+            ? ((HibernateProxy) this).getHibernateLazyInitializer()
+                .getPersistentClass().hashCode()
+            : getClass().hashCode();
     }
 }
 ```
