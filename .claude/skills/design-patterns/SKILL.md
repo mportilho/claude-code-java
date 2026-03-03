@@ -8,6 +8,7 @@ description: Common design patterns with Java examples (Factory, Builder, Strate
 Practical design patterns reference for Java with modern examples.
 
 ## When to Use
+
 - User asks to implement a specific pattern
 - Designing extensible/flexible components
 - Refactoring rigid code structures
@@ -110,15 +111,34 @@ User user = User.builder("John", "john@example.com")
     .build();
 ```
 
-**With Lombok:**
+**Modern Java (Records):**
+
 ```java
-@Builder
-@Getter
-public class User {
-    private final String name;
-    private final String email;
-    @Builder.Default private int age = 0;
-    private String phone;
+public record User(String name, String email, int age, String phone, String address) {
+    public static Builder builder(String name, String email) {
+        return new Builder(name, email);
+    }
+
+    public static class Builder {
+        private final String name;
+        private final String email;
+        private int age = 0;
+        private String phone = "";
+        private String address = "";
+
+        private Builder(String name, String email) {
+            this.name = name;
+            this.email = email;
+        }
+
+        public Builder age(int age) { this.age = age; return this; }
+        public Builder phone(String phone) { this.phone = phone; return this; }
+        public Builder address(String address) { this.address = address; return this; }
+
+        public User build() {
+            return new User(name, email, age, phone, address);
+        }
+    }
 }
 ```
 
@@ -157,25 +177,28 @@ public class PushNotification implements Notification {
     }
 }
 
+// Create enum for type safety
+public enum NotificationType { EMAIL, SMS, PUSH }
+
 // Factory
 public class NotificationFactory {
 
-    public static Notification create(String type) {
-        return switch (type.toUpperCase()) {
-            case "EMAIL" -> new EmailNotification();
-            case "SMS" -> new SmsNotification();
-            case "PUSH" -> new PushNotification();
-            default -> throw new IllegalArgumentException("Unknown type: " + type);
-        };
+    public static Notification create(NotificationType type) {
+        return switch (type) {
+            case EMAIL -> new EmailNotification();
+            case SMS -> new SmsNotification();
+            case PUSH -> new PushNotification();
+        }; // Exhaustive switch, no default needed
     }
 }
 
 // Usage
-Notification notification = NotificationFactory.create("EMAIL");
+Notification notification = NotificationFactory.create(NotificationType.EMAIL);
 notification.send("Hello!");
 ```
 
 **With Spring (common in Spring apps):**
+
 ```java
 public interface NotificationSender {
     void send(String message);
@@ -282,6 +305,7 @@ Connection conn = DatabaseConnection.INSTANCE.getConnection();
 ```
 
 **With Spring (common in Spring apps):**
+
 ```java
 @Component  // Default scope is singleton
 public class DatabaseConnection {
@@ -290,6 +314,7 @@ public class DatabaseConnection {
 ```
 
 **Warning:** Singletons can be problematic:
+
 - Hard to test (global state)
 - Hidden dependencies
 - Consider dependency injection instead
@@ -371,6 +396,7 @@ cart.checkout(new BigDecimal("49.99"));
 ```
 
 **With Java 8+ (functional):**
+
 ```java
 // Strategy as functional interface
 @FunctionalInterface
@@ -386,6 +412,31 @@ PaymentStrategy paypal = amount ->
     System.out.println("PayPal payment: " + amount);
 
 cart.setPaymentStrategy(creditCard);
+```
+
+**With Java 21+ (Pattern Matching / Sealed Interfaces):**
+
+```java
+public sealed interface PaymentMethod permits CreditCard, PayPal, Crypto {}
+
+public record CreditCard(String cardNumber) implements PaymentMethod {}
+public record PayPal(String email) implements PaymentMethod {}
+public record Crypto(String walletAddress) implements PaymentMethod {}
+
+public class PaymentProcessor {
+    public void pay(BigDecimal amount, PaymentMethod method) {
+        // Exhaustive switch using pattern matching
+        switch (method) {
+            case CreditCard cc -> System.out.println("Paid " + amount + " with card " + cc.cardNumber());
+            case PayPal pp -> System.out.println("Paid " + amount + " via PayPal: " + pp.email());
+            case Crypto cr -> System.out.println("Paid " + amount + " to wallet: " + cr.walletAddress());
+        }
+    }
+}
+
+// Usage
+PaymentProcessor processor = new PaymentProcessor();
+processor.pay(new BigDecimal("99.99"), new CreditCard("4111-1111-1111-1111"));
 ```
 
 ---
@@ -455,6 +506,7 @@ orderService.addObserver(new AnalyticsService());
 ```
 
 **With Spring Events (common in Spring apps):**
+
 ```java
 // Event
 public record OrderPlacedEvent(Order order) {}
@@ -487,9 +539,26 @@ public class EmailListener {
     }
 
     @EventListener
-    @Async  // Async processing
+    @Async  // Async processing (Spring Boot 3.2+ supports Virtual Threads here automatically)
     public void handleOrderPlacedAsync(OrderPlacedEvent event) {
-        // Send email asynchronously
+        // Send email asynchronously on a virtual thread
+    }
+}
+
+// Alternative: Pure Java 21+ Structured Concurrency for explicit parallel tasks
+public class OrderProcessor {
+    public void processOrderParallel(Order order) throws InterruptedException {
+        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+            // Fork tasks to run concurrently on virtual threads
+            scope.fork(() -> { reduceInventory(order); return null; });
+            scope.fork(() -> { sendConfirmationEmail(order); return null; });
+            scope.fork(() -> { trackOrderEvent(order); return null; });
+
+            // Wait for all to complete, fail if any fails
+            scope.join().throwIfFailed();
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Order processing failed", e);
+        }
     }
 }
 ```
@@ -578,9 +647,9 @@ apiProcessor.process();
 
 ---
 
-### Declarative Resilience (Spring 7+)
+### Declarative Resilience (Spring Boot 4 / Framework 7+)
 
-**Use when:** Need retry, transient-failure handling, and concurrency limits around I/O calls.
+**Use when:** Need retry, transient-failure handling, and concurrency limits around I/O calls without heavy external libraries.
 
 ```java
 @Service
@@ -594,7 +663,7 @@ public class PaymentGatewayClient {
 }
 ```
 
-**Why this is recent:** Spring Framework 7 introduced resilience annotations such as `@Retryable` and `@ConcurrencyLimit` for declarative guardrails around remote calls.
+**Why this is recent:** Spring Boot 4 / Framework 7 introduced resilience annotations such as `@Retryable` and `@ConcurrencyLimit` for native declarative guardrails around remote calls.
 
 ---
 
@@ -702,6 +771,7 @@ System.out.println(coffee.getCost());         // 3.40
 ```
 
 **Java I/O uses Decorator:**
+
 ```java
 // Classic example from Java
 BufferedReader reader = new BufferedReader(
