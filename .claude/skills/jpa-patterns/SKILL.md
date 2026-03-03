@@ -5,9 +5,11 @@ description: JPA/Hibernate patterns and common pitfalls (N+1, lazy loading, tran
 
 # JPA Patterns Skill
 
-Best practices and common pitfalls for JPA/Hibernate in Spring applications.
+Best practices and common pitfalls for JPA/Hibernate in Spring Boot 4 /
+Hibernate 7.x applications, optimized for modern Java (JDK 21/25).
 
 ## When to Use
+
 - User mentions "N+1 problem" / "too many queries"
 - LazyInitializationException errors
 - Questions about fetch strategies (EAGER vs LAZY)
@@ -20,9 +22,9 @@ Best practices and common pitfalls for JPA/Hibernate in Spring applications.
 ## Quick Reference: Common Problems
 
 | Problem | Symptom | Solution |
-|---------|---------|----------|
+| --- | --- | --- |
 | N+1 queries | Many SELECT statements | JOIN FETCH, @EntityGraph |
-| LazyInitializationException | Error outside transaction | DTO projection, service transaction, JOIN FETCH (OSIV only with caution) |
+| LazyInitializationException | Error | DTO projection, service transaction, JOIN FETCH |
 | Slow queries | Performance issues | Pagination, projections, indexes |
 | Dirty checking overhead | Slow updates | Read-only transactions, DTOs |
 | Lost updates | Concurrent modifications | Optimistic locking (@Version) |
@@ -181,15 +183,19 @@ order.getItems().size();  // 💥 LazyInitializationException!
 
 ### Solutions for LazyInitializationException
 
-**Solution 1: JOIN FETCH in query**
+#### Solution 1: JOIN FETCH in query
+
 ```java
 // ✅ Fetch needed associations in query
 @Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.id = :id")
 Optional<Order> findByIdWithItems(@Param("id") Long id);
 ```
-`JOIN FETCH` with collections is great to avoid N+1, but avoid combining it with pagination/limits.
 
-**Solution 2: @Transactional on service method**
+`JOIN FETCH` with collections is great to avoid N+1, but avoid combining it
+with pagination/limits.
+
+#### Solution 2: @Transactional on service method
+
 ```java
 // ✅ Keep transaction open while accessing
 @Service
@@ -205,7 +211,8 @@ public class OrderService {
 }
 ```
 
-**Solution 3: DTO Projection (recommended)**
+#### Solution 3: DTO Projection (recommended)
+
 ```java
 // ✅ BEST: Return only what you need
 public interface OrderSummary {
@@ -219,13 +226,18 @@ public interface OrderSummary {
 Optional<OrderSummary> findOrderSummary(@Param("id") Long id);
 ```
 
-**Solution 4: Open Session in View (not recommended)**
+#### Solution 4: Open Session in View (NOT recommended, mostly with Virtual Threads)
+
 ```yaml
 # Keeps session open during view rendering
-# ⚠️ Can mask N+1 problems, use with caution
+# ⚠️ Highly dangerous with JDK 21+ Virtual Threads:
+# Virtual threads blocked on view rendering will keep the JDBC connection
+# pinned, rapidly exhausting DB pool and bringing
+# down the application.
 spring:
   jpa:
-    open-in-view: true  # Default is true
+    # Disable explicitly (Spring Boot 4 may default to false, but be safe)
+    open-in-view: false
 ```
 
 ---
@@ -238,7 +250,8 @@ spring:
 @Service
 public class OrderService {
 
-    // Read-only: optimization hint (provider-dependent), often reduces flush/dirty-check overhead
+    // Read-only: optimization hint (provider-dependent), often reduces flush
+    // and dirty-check overhead
     @Transactional(readOnly = true)
     public Order findById(Long id) {
         return orderRepository.findById(id).orElseThrow();
@@ -464,14 +477,25 @@ public class Course {
 }
 ```
 
-### Identifier Strategy: UUID (Jakarta Persistence 3.1+)
+### Identifier Strategy: TSID / ULID (Modern Applications)
 
 ```java
+// ❌ BAD for scalability: Standard UUIDs (GenerationType.UUID)
+// Standard UUIDs cause severe B-Tree index fragmentation and massive database
+// pages overhead.
+
+// ✅ GOOD: Use TSID (Time-Sorted ID) or ULID
+// They combine a timestamp with random data: lexicographically sortable,
+// cluster-friendly, avoids fragmentation.
 @Entity
 public class PurchaseOrder {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    // Requires hypersistence-utils or similar library, best practice JDK 21+
+    @Tsid
+    private Long id;
+    
+    // OR if using String/UUID format:
+    // private String ulid;
 }
 ```
 
@@ -506,17 +530,21 @@ public class Book {
 
 ## Query Optimization
 
-### Pagination
+### Pagination (Page vs Slice)
 
 ```java
-// ✅ GOOD: Always paginate large result sets
+// ❌ BAD: Using Page<T> when exact total count is not needed
+// Page<T> executes an expensive COUNT() query, scaling poorly on large tables.
+
+// ✅ GOOD: Always paginate large result sets using Slice<T> if you only
+// need "Next/Previous" buttons
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    Page<Order> findByStatus(OrderStatus status, Pageable pageable);
+    Slice<Order> findByStatus(OrderStatus status, Pageable pageable);
 
-    // With sorting
+    // If you absolutely need the total count:
     @Query("SELECT o FROM Order o WHERE o.status = :status")
-    Page<Order> findByStatusSorted(
+    Page<Order> findByStatusWithCount(
         @Param("status") OrderStatus status,
         Pageable pageable
     );
@@ -524,8 +552,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 // Usage
 Pageable pageable = PageRequest.of(0, 20, Sort.by("createdAt").descending());
-Page<Order> orders = orderRepository.findByStatus(OrderStatus.PENDING, pageable);
+Slice<Order> orders = orderRepository.findByStatus(OrderStatus.PENDING, pageable);
 ```
+
 For collection relationships, avoid `JOIN FETCH` + pagination in a single query.
 Prefer paging root IDs first, then fetching associations in a second query.
 
