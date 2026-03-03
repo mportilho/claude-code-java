@@ -18,6 +18,7 @@ This skill helps you **notice** potential performance smells, not blindly "fix" 
 3. **Consider readability** - Clear code often matters more than micro-optimizations
 
 ## When to Use
+
 - Reviewing performance-critical code paths
 - Investigating measured performance issues
 - Learning about Java performance patterns
@@ -25,7 +26,7 @@ This skill helps you **notice** potential performance smells, not blindly "fix" 
 
 ## Scope
 
-**This skill:** Code-level performance (streams, collections, objects)
+**This skill:** Code-level performance (streams, collections, objects). It also notes considerations around modern high-performance memory using the Foreign Function & Memory API (FFM API, standard in Java 22+).
 **For database:** Use `jpa-patterns` skill (N+1, lazy loading, pagination)
 **For architecture:** Use `architecture-review` skill
 
@@ -99,6 +100,7 @@ log.debug("Processing {} with id {}", name, id);
 ### The Reality
 
 Streams have overhead, but it's **often acceptable**:
+
 - **< 100 items**: Streams can be 2-5x slower (but still microseconds)
 - **1K-10K items**: Difference narrows significantly
 - **> 10K items**: Often within 50% of loops
@@ -269,7 +271,7 @@ public Page<User> getUsers(Pageable pageable) {
 
 ## Modern Java (21/25+) Patterns
 
-### Virtual Threads for I/O (Java 21+ / Spring Boot 3.2+)
+### Virtual Threads for I/O (Java 21+ / Spring Boot 4.x)
 
 ```java
 // 🟡 Traditional thread pool for I/O - wastes OS threads
@@ -278,7 +280,7 @@ for (Request request : requests) {
     executor.submit(() -> callExternalApi(request));  // Blocks OS thread
 }
 
-// ✅ Spring Boot 4 / 3.2+ Idiomatic setup
+// ✅ Spring Boot 4.x Idiomatic setup
 // In application.properties: spring.threads.virtual.enabled=true
 // Then Spring automatically uses Virtual Threads for web requests, scheduled tasks, and its default TaskExecutors.
 
@@ -337,23 +339,41 @@ Object first = collection.getFirst();
 Object last = collection.getLast();
 ```
 
+### Scoped Values (Java 21+ Preview / Java 25) vs ThreadLocal
+
+```java
+// 🔴 ThreadLocal with Virtual Threads - Massive memory bloat
+// Since virtual threads are cheap, you might have millions. ThreadLocals are kept alive and can cause massive footprint issues.
+private static final ThreadLocal<UserContext> USER_CONTEXT = new ThreadLocal<>();
+
+// ✅ Scoped Values (JEP 464) - Memory efficient, immutable, and scoped
+// Bound only for the duration of the run method, automatically garbage collected when out of scope.
+private static final ScopedValue<UserContext> USER_CONTEXT = ScopedValue.newInstance();
+
+ScopedValue.where(USER_CONTEXT, currentContext)
+           .run(() -> processRequest());
+```
+
 ---
 
 ## Performance Review Checklist
 
 ### 🔴 High Severity (Usually Worth Fixing)
+
 - [ ] Regex Pattern.compile in loops
 - [ ] Unbounded queries without pagination
 - [ ] String concatenation in loops (StringBuilder still valid)
 - [ ] Parallel streams with shared mutable state
 
 ### 🟡 Medium Severity (Measure First)
+
 - [ ] Streams in tight loops (>100K iterations)
 - [ ] Boxing in hot paths
 - [ ] List.contains() in loops (use Set)
 - [ ] Traditional threads for I/O (consider Virtual Threads)
 
 ### 🟢 Low Severity (Nice to Have)
+
 - [ ] Collection initial capacity
 - [ ] Minor stream optimizations
 - [ ] toArray(new T[0]) vs toArray(new T[size])
