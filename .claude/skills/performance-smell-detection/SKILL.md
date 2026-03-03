@@ -11,7 +11,7 @@ Identify **potential** code-level performance issues in Java code.
 
 > "Premature optimization is the root of all evil" - Donald Knuth
 
-This skill helps you **notice** potential performance smells, not blindly "fix" them. Modern JVMs (Java 21/25) are highly optimized. Always:
+This skill helps you **notice** potential performance smells, not blindly "fix" them. Modern JVMs (Java 21/25+) are highly optimized. Always:
 
 1. **Measure first** - Use JMH, profilers, or production metrics
 2. **Focus on hot paths** - 90% of time spent in 10% of code
@@ -44,7 +44,7 @@ This skill helps you **notice** potential performance smells, not blindly "fix" 
 
 ---
 
-## String Operations (Java 9+ / 21 / 25)
+## String Operations (Java 9+ / 21 / 25+)
 
 ### What Changed
 
@@ -267,9 +267,9 @@ public Page<User> getUsers(Pageable pageable) {
 
 ---
 
-## Modern Java (21/25) Patterns
+## Modern Java (21/25+) Patterns
 
-### Virtual Threads for I/O (Java 21+)
+### Virtual Threads for I/O (Java 21+ / Spring Boot 3.2+)
 
 ```java
 // 🟡 Traditional thread pool for I/O - wastes OS threads
@@ -278,7 +278,11 @@ for (Request request : requests) {
     executor.submit(() -> callExternalApi(request));  // Blocks OS thread
 }
 
-// ✅ Virtual threads - millions of concurrent I/O operations
+// ✅ Spring Boot 4 / 3.2+ Idiomatic setup
+// In application.properties: spring.threads.virtual.enabled=true
+// Then Spring automatically uses Virtual Threads for web requests, scheduled tasks, and its default TaskExecutors.
+
+// ✅ Virtual threads - Manual fallback (if not in a managed Spring context)
 try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
     for (Request request : requests) {
         executor.submit(() -> callExternalApi(request));
@@ -301,6 +305,38 @@ try (StructuredTaskScope.ShutdownOnFailure scope = new StructuredTaskScope.Shutd
 }
 ```
 
+### Pattern Matching (Java 21+)
+
+```java
+// 🟡 Chained instanceof with casting adds minor overhead and hurts readability
+if (obj instanceof String) {
+    String s = (String) obj;
+    // ...
+} else if (obj instanceof Integer) {
+    Integer i = (Integer) obj;
+    // ...
+}
+
+// ✅ Pattern matching with switch is more readable and potentially optimized by JVM
+switch (obj) {
+    case String s -> processString(s);
+    case Integer i -> processInteger(i);
+    default -> processUnknown(obj);
+}
+```
+
+### Sequenced Collections (Java 21+)
+
+```java
+// 🟡 Less efficient last element access
+Object last = list.get(list.size() - 1); // For ArrayList (Fine)
+Object lastSet = new ArrayList<>(set).get(set.size() - 1); // Very inefficient for Sets
+
+// ✅ O(1) expressive access for any SequencedCollection
+Object first = collection.getFirst();
+Object last = collection.getLast();
+```
+
 ---
 
 ## Performance Review Checklist
@@ -321,6 +357,8 @@ try (StructuredTaskScope.ShutdownOnFailure scope = new StructuredTaskScope.Shutd
 - [ ] Collection initial capacity
 - [ ] Minor stream optimizations
 - [ ] toArray(new T[0]) vs toArray(new T[size])
+- [ ] Pattern Matching instead of chained instanceof checks
+- [ ] Sequenced Collections for first/last element access
 
 ---
 
