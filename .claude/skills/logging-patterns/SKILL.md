@@ -340,34 +340,83 @@ MDC.put("userId", authentication.getName());
 log.info("User action performed");  // {"userId":"john123","message":"User action performed"}
 ```
 
-### Context Propagation with Virtual Threads (Java 25+ / Spring Boot 3.2+)
+### Context Propagation with Virtual Threads & Async (Java 25+ / Spring Boot 3.2+ / 4.x)
 
-MDC `ThreadLocal` context doesn't automatically propagate to new threads (including virtual threads). Modern Spring Boot uses **Micrometer Context Propagation**.
+MDC `ThreadLocal` context doesn't automatically propagate to new threads (including virtual threads). Modern Spring Boot uses **Micrometer Context Propagation** to handle observability across boundaries seamlessly.
+
+**Note:** Spring Boot automatically manages many boundaries (like `@Async` when `spring.threads.virtual.enabled=true`), but manual hand-offs require explicit handling.
+
+#### 1. Basic Wrap (Runnable/Callable)
+
+If submitting ad-hoc tasks, capture context from the current thread and wrap the execution block:
 
 ```java
 import io.micrometer.context.ContextSnapshotFactory;
 // ...
 
-// ✅ Modern pattern: Wrap the task with context before submitting to an executor (or using @Async)
 Runnable task = () -> {
-    log.info("Async task running"); // Has requestId, userId
+    log.atInfo().setMessage("Async task running").log(); // Retains MDC
 };
 
-// Capture context from current thread
+// Capture context and wrap task
 Runnable wrappedTask = ContextSnapshotFactory.builder().build().captureAll().wrap(task);
-
-// Run on virtual threads
 Executors.newVirtualThreadPerTaskExecutor().submit(wrappedTask);
+```
 
-// Alternatively, configure Spring's TaskExecutor to automatically propagate:
-// spring.threads.virtual.enabled=true
-// and use @Async
+#### 2. Native ThreadLocal restore (Inside the Thread)
+
+If wrapping the entire runnable isn't feasible, use `setThreadLocals()` inside the block:
+
+```java
+val snapshot = ContextSnapshotFactory.builder().build().captureAll();
+
+Executors.newVirtualThreadPerTaskExecutor().submit(() -> {
+    // Restores context for the scope of this try-with-resources block
+    try (var scope = snapshot.setThreadLocals()) {
+        log.atInfo().setMessage("Running with context").log();
+    }
+});
+```
+
+#### 3. Wrappers for ExecutorService
+
+Avoid wrapping each task manually if you control the `ExecutorService`. Micrometer provides specialized wrappers:
+
+```java
+import io.micrometer.context.ContextExecutorService;
+
+// Wraps the entire executor to automatically propagate context to all submitted tasks
+ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
+ExecutorService contextAwareExecutor = ContextExecutorService.wrap(virtualExecutor);
+
+contextAwareExecutor.submit(() -> log.atInfo().setMessage("Context propagated automatically").log());
+```
+
+#### 4. Reactor Context (Spring WebFlux)
+
+When mixing WebFlux with structured patterns, `ContextSnapshot` bridges MDC and the Reactor Context.
+
+```java
+import io.micrometer.context.ContextSnapshotFactory;
+// ...
+ContextSnapshotFactory factory = ContextSnapshotFactory.builder().build();
+
+return Mono.just("data")
+    // Read from Reactor Context -> restore to MDC for logging
+    .doOnNext(data -> Mono.deferContextual(ctx -> {
+        try (var scope = factory.captureFrom(ctx).setThreadLocals()) {
+            log.atInfo().setMessage("Reactive Logging").log();
+            return Mono.empty();
+        }
+    }).subscribe())
+    // Capture current MDC -> write into Reactor Context for downstream
+    .contextWrite(ctx -> factory.captureAll().updateContext(ctx));
 ```
 
 **Legacy pattern (Manual MDC copy):**
 
 ```java
-// ⚠️ Manual copying is error-prone. Avoid in modern apps.
+// ⚠️ Manual copying is error-prone. Avoid in modern Spring Boot 3+ / 4.x apps.
 Map<String, String> context = MDC.getCopyOfContextMap();
 CompletableFuture.runAsync(() -> {
     try {
