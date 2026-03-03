@@ -15,6 +15,8 @@ Efficiently triage GitHub issues for Java projects with categorization and prior
 
 ## Prerequisites
 
+> **Note on AI Providers and CLI Tools**: While this documentation uses Claude and the `claude` CLI for its examples, be aware that there are other AI providers (such as Gemini, ChatGPT, etc.) that also provide CLI tooling or MCP client integrations capable of performing these documented actions. The core principles of tool usage remain the same, relying on an agent's ability to interface with GitHub's APIs or CLI commands.
+
 **Recommended**: GitHub MCP server configured for optimal token usage
 ```bash
 claude mcp add github --transport http \
@@ -235,9 +237,9 @@ I've added it to milestone X.Y and labeled it as [priority].
 Contributions welcome if anyone wants to tackle it!
 
 Reproduction verified with:
-- Java 17
-- Version 3.10.0
-- Ubuntu 22.04
+- Java 25 (Fallback compatible with Java 21)
+- Spring Boot 4.0.0
+- Ubuntu 24.04
 ```
 
 #### Feature Request - Under Consideration
@@ -338,19 +340,17 @@ Link to specific comment if clarification exists
 
 ## Automation Opportunities
 
-### Auto-close stale issues
-```bash
-# Issues with no activity for 90 days and "needs-more-info" label
-"Find stale issues (>90 days, needs-more-info label), 
-suggest closing with polite message"
-```
+> **Modern Hybrid Pattern**: Current best practice is to separate deterministic, high-volume tasks into CI/CD pipelines (e.g., GitHub Actions), while reserving AI Agents for nuanced, semantic assessments.
 
-### Label by keywords
+### Deterministic Tasks (e.g., via GitHub Actions)
+- **Auto-close stale issues**: Define a cron job to automatically close issues without activity for 90 days and lacking specific tags.
+- **Label by simple keywords**: Automatically apply labels like `bug` for stack traces, or `enhancement` based on issue templates without consuming AI tokens.
+
+### Cognitive Tasks (via AI CLI / MCP)
 ```bash
-# Auto-label based on content
-"java.lang.NullPointerException" → bug
-"add support for" → enhancement
-"how do I" → question
+# Analyze complex sentiment, evaluate feature requests against roadmap
+"Review issues labeled 'enhancement' from the last 30 days. Group them by 
+semantic similarity and suggest 5 priorities based on our Q3 goals."
 ```
 
 ### Weekly summary
