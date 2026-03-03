@@ -8,6 +8,7 @@ description: Write high-quality JUnit 5 tests with AssertJ assertions. Use when 
 Write high-quality, maintainable tests for Java projects using modern best practices.
 
 ## When to Use
+
 - Writing new test classes
 - Reviewing/improving existing tests
 - User asks to "add tests" / "improve test coverage"
@@ -16,6 +17,7 @@ Write high-quality, maintainable tests for Java projects using modern best pract
 ## Framework Preferences
 
 ### JUnit 5 (Jupiter)
+
 ```java
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +27,9 @@ import static org.assertj.core.api.Assertions.*;
 ```
 
 ### AssertJ over standard assertions
+
 ✅ **Use AssertJ**:
+
 ```java
 assertThat(plugin.getState())
     .as("Plugin should be started after initialization")
@@ -38,6 +42,7 @@ assertThat(plugins)
 ```
 
 ❌ **Avoid JUnit assertions**:
+
 ```java
 assertEquals(PluginState.STARTED, plugin.getState()); // Less readable
 assertTrue(plugins.size() == 3); // Less descriptive failures
@@ -52,11 +57,11 @@ Always use Arrange-Act-Assert pattern:
 @DisplayName("Should load plugin from valid directory")
 void shouldLoadPluginFromValidDirectory() {
     // Arrange - Setup test data and dependencies
-    Path pluginDir = Paths.get("test-plugins/valid-plugin");
-    PluginLoader loader = new DefaultPluginLoader();
+    var pluginDir = Paths.get("test-plugins/valid-plugin");
+    var loader = new DefaultPluginLoader();
     
     // Act - Execute the behavior being tested
-    Plugin plugin = loader.load(pluginDir);
+    var plugin = loader.load(pluginDir);
     
     // Assert - Verify results
     assertThat(plugin)
@@ -69,6 +74,7 @@ void shouldLoadPluginFromValidDirectory() {
 ## Naming Conventions
 
 ### Test class names
+
 ```java
 // Class under test: PluginManager
 PluginManagerTest           // ✅ Simple, standard
@@ -79,6 +85,7 @@ TestPluginManager           // ❌ Avoid
 ### Test method names
 
 **Option 1: should_expectedBehavior_when_condition** (descriptive)
+
 ```java
 @Test
 void should_throwException_when_pluginDirectoryNotFound() { }
@@ -91,6 +98,7 @@ void should_loadPluginsInDependencyOrder_when_multipleDependencies() { }
 ```
 
 **Option 2: Natural language with @DisplayName** (cleaner code)
+
 ```java
 @Test
 @DisplayName("Should load all plugins from directory")
@@ -104,6 +112,7 @@ void invalidPluginDescriptor() { }
 ## AssertJ Power Features
 
 ### Collection assertions
+
 ```java
 // Basic collection checks
 assertThat(plugins)
@@ -123,6 +132,7 @@ assertThat(plugins)
 ```
 
 ### Exception assertions
+
 ```java
 // Basic exception check
 assertThatThrownBy(() -> loader.load(invalidPath))
@@ -144,6 +154,7 @@ assertThatExceptionOfType(PluginException.class)
 ```
 
 ### Object assertions
+
 ```java
 // Extract and verify multiple properties
 assertThat(plugin)
@@ -163,6 +174,7 @@ assertThat(actualPlugin)
 ```
 
 ### Soft assertions (multiple checks)
+
 ```java
 @Test
 void shouldHaveValidPluginDescriptor() {
@@ -187,6 +199,7 @@ void shouldHaveValidPluginDescriptor() {
 ```
 
 ### String assertions
+
 ```java
 assertThat(errorMessage)
     .startsWith("Error:")
@@ -199,6 +212,7 @@ assertThat(errorMessage)
 ## Test Organization
 
 ### Nested tests for clarity
+
 ```java
 @DisplayName("PluginManager")
 class PluginManagerTest {
@@ -247,6 +261,7 @@ class PluginManagerTest {
 ```
 
 ### Parameterized tests
+
 ```java
 @ParameterizedTest
 @ValueSource(strings = {"1.0.0", "2.1.3", "10.0.0-SNAPSHOT"})
@@ -265,7 +280,7 @@ void shouldAcceptValidVersions(String version) {
 })
 @DisplayName("Should load plugin with expected state")
 void shouldLoadPluginWithState(String id, String version, PluginState expectedState) {
-    Plugin plugin = createPlugin(id, version);
+    var plugin = createPlugin(id, version);
     
     assertThat(plugin.getState()).isEqualTo(expectedState);
 }
@@ -290,6 +305,7 @@ static Stream<Arguments> invalidPluginDescriptors() {
 ## Common Patterns
 
 ### Testing with mocks (Mockito)
+
 ```java
 @ExtendWith(MockitoExtension.class)
 class PluginManagerTest {
@@ -314,7 +330,7 @@ class PluginManagerTest {
         when(repository.findAll()).thenReturn(descriptors);
         
         // When
-        List<Plugin> plugins = manager.loadAll();
+        var plugins = manager.loadAll();
         
         // Then
         assertThat(plugins).hasSize(2);
@@ -325,6 +341,7 @@ class PluginManagerTest {
 ```
 
 ### Test fixtures with @BeforeEach
+
 ```java
 @BeforeEach
 void setUp() throws IOException {
@@ -332,10 +349,7 @@ void setUp() throws IOException {
     pluginDir = Files.createTempDirectory("test-plugins");
     
     // Initialize plugin manager with test config
-    PluginConfig config = PluginConfig.builder()
-        .pluginDirectory(pluginDir)
-        .enableValidation(true)
-        .build();
+    var config = new PluginConfig(pluginDir, true);
     
     pluginManager = new DefaultPluginManager(config);
 }
@@ -353,11 +367,12 @@ void tearDown() throws IOException {
 ```
 
 ### Testing async operations
+
 ```java
 @Test
 @DisplayName("Should complete async plugin loading")
 void shouldCompleteAsyncLoading() {
-    CompletableFuture<Plugin> future = manager.loadAsync(pluginPath);
+    var future = manager.loadAsync(pluginPath);
     
     assertThat(future)
         .succeedsWithin(Duration.ofSeconds(5))
@@ -373,6 +388,7 @@ void shouldCompleteAsyncLoading() {
 When writing tests:
 
 ### 1. Generate test skeleton first
+
 ```java
 // Phase 1: List test cases as comments
 // @Test void shouldLoadPlugin() { }
@@ -381,19 +397,18 @@ When writing tests:
 ```
 
 ### 2. Implement incrementally
+
 - One test at a time
 - Verify compilation after each
 - Run tests to validate
 - Refactor if needed
 
 ### 3. Reuse patterns
+
 ```java
 // Extract common setup to helper methods
 private Plugin createTestPlugin(String id, String version) {
-    return Plugin.builder()
-        .id(id)
-        .version(version)
-        .build();
+    return new Plugin(id, version);
 }
 ```
 
@@ -405,7 +420,9 @@ private Plugin createTestPlugin(String id, String version) {
 - **Test**: Happy paths + error conditions + boundary cases
 
 ### What to test
+
 ✅ **High priority**:
+
 - Public APIs
 - Complex business logic
 - Error handling
@@ -413,6 +430,7 @@ private Plugin createTestPlugin(String id, String version) {
 - Integration points
 
 ❌ **Low priority**:
+
 ```java
 // Simple getters/setters
 public String getId() { return id; }
@@ -429,6 +447,7 @@ public class PluginInfo {
 ## Anti-patterns
 
 ❌ **Avoid**:
+
 ```java
 // 1. Generic test names
 @Test void test1() { }
@@ -461,14 +480,12 @@ assertThat(message).isEqualTo("Error at 2024-01-26 10:30:15");
 ```
 
 ✅ **Prefer**:
+
 ```java
 @Test
 @DisplayName("Should reject plugin with missing dependencies")
 void shouldRejectPluginWithMissingDependencies() {
-    PluginDescriptor descriptor = PluginDescriptor.builder()
-        .id("test-plugin")
-        .dependencies(List.of("missing-dep"))
-        .build();
+    var descriptor = new PluginDescriptor("test-plugin", List.of("missing-dep"));
     
     assertThatThrownBy(() -> manager.load(descriptor))
         .isInstanceOf(PluginException.class)
@@ -476,14 +493,73 @@ void shouldRejectPluginWithMissingDependencies() {
 }
 ```
 
+## Integration with Spring Boot 4
+
+When testing modern Spring Boot 4 applications, use these patterns:
+
+### Slice Testing and `@MockitoBean`
+
+Spring Boot 4 introduces `@MockitoBean` (replacing the older `@MockBean`) and `@MockitoSpyBean`.
+
+```java
+@WebMvcTest(PluginController.class)
+class PluginControllerTest {
+    
+    @Autowired
+    private MockMvc mockMvc;
+    
+    @MockitoBean
+    private PluginManager manager;
+    
+    @Test
+    @DisplayName("Should return list of plugins")
+    void shouldReturnPlugins() throws Exception {
+        var plugins = List.of(new Plugin("test-plugin", "1.0"));
+        when(manager.loadAll()).thenReturn(plugins);
+        
+        mockMvc.perform(get("/api/plugins"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value("test-plugin"));
+    }
+}
+```
+
+### Integration Testing with Testcontainers
+
+For full integration tests, prefer Testcontainers over embedded databases:
+
+```java
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+class PluginIntegrationTest {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+
+    @Autowired
+    private TestRestTemplate restTemplate;
+
+    @Test
+    @DisplayName("Should load application context and verify DB connection")
+    void contextLoads() {
+        assertThat(postgres.isRunning()).isTrue();
+        
+        var response = restTemplate.getForEntity("/api/health", String.class);
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+    }
+}
+```
+
 ## Integration with Coverage Tools
 
 ### Maven configuration
+
 ```xml
 <plugin>
     <groupId>org.jacoco</groupId>
     <artifactId>jacoco-maven-plugin</artifactId>
-    <version>0.8.11</version>
+    <version>0.8.14</version>
     <executions>
         <execution>
             <goals>
@@ -501,7 +577,8 @@ void shouldRejectPluginWithMissingDependencies() {
 </plugin>
 ```
 
-### After test generation, suggest:
+### After test generation, suggest
+
 ```bash
 # Run tests with coverage
 mvn clean test jacoco:report
