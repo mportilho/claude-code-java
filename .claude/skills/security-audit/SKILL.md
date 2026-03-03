@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Java security checklist covering OWASP Top 10, input validation, injection prevention, and secure coding. Works with Spring Boot 3/4, Quarkus, Jakarta EE, and plain Java. Use when an AI Agent or user checks for code security vulnerabilities, or before releases.
+description: Java security checklist covering OWASP Top 10, input validation, injection prevention, and secure coding. Works with Spring Boot 4, Quarkus, Jakarta EE 11+, and plain Java. Use when an AI Agent or user checks for code security vulnerabilities, or before releases.
 ---
 
 # Security Audit Skill
@@ -33,11 +33,20 @@ Security checklist for Java applications based on OWASP Top 10 and secure coding
 
 ---
 
+## SecurityManager Removal (Java 21/25+)
+
+Java's legacy `SecurityManager` has been permanently removed in modern JDKs (JEP 411 / JDK 24+). Security enforcement must now rely on:
+- **Container / OS-Level Constraints**: Use Docker/Kubernetes capabilities, cgroups, and unprivileged users.
+- **Strong Encapsulation**: Use Java Modules (`module-info.java`) to protect internal APIs.
+- **Framework-Level Authorization**: Use Spring Security or similar frameworks instead of JVM sandbox checks.
+
+---
+
 ## Input Validation (All Frameworks)
 
-### Jakarta Validation (Jakarta EE 10+)
+### Jakarta Validation (Jakarta EE 11+)
 
-Works in modern Spring Boot 3/4, Quarkus, Jakarta EE 10+, and standalone. Make sure to use `jakarta.validation` instead of legacy `javax.validation`.
+Works in modern Spring Boot 4, Quarkus, Jakarta EE 11+, and standalone. Make sure to use `jakarta.validation` instead of legacy `javax.validation`.
 
 ```java
 // ✅ GOOD: Validate at boundary
@@ -195,7 +204,7 @@ String safeUrl = Encode.forUriComponent(userInput);
 <dependency>
     <groupId>org.owasp.encoder</groupId>
     <artifactId>encoder</artifactId>
-    <version>1.4.0</version>
+    <version>1.3.1</version>
 </dependency>
 ```
 
@@ -445,7 +454,7 @@ public class JacksonConfig {
 <plugin>
     <groupId>org.owasp</groupId>
     <artifactId>dependency-check-maven</artifactId>
-    <version>12.2.0</version>
+    <version>12.1.3</version>
     <executions>
         <execution>
             <goals>
@@ -509,15 +518,45 @@ public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 ## Logging Security Events
 
 ```java
-// ✅ Log security-relevant events
-log.info("User login successful", kv("userId", userId), kv("ip", clientIp));
-log.warn("Failed login attempt", kv("username", username), kv("ip", clientIp), kv("attempt", attemptCount));
-log.warn("Access denied", kv("userId", userId), kv("resource", resourceId), kv("action", action));
-log.error("Authentication failure", kv("reason", reason), kv("ip", clientIp));
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-// ❌ NEVER log sensitive data
-log.info("Login: user={}, password={}", username, password);  // NEVER!
-log.debug("Request body: {}", requestWithCreditCard);  // NEVER!
+public class SecurityLogger {
+    private static final Logger logger = LoggerFactory.getLogger(SecurityLogger.class);
+
+    public void logEvents() {
+        // ✅ GOOD: Log security-relevant events using SLF4J 2.0 Fluent API
+        logger.atInfo()
+            .setMessage("User login successful")
+            .addKeyValue("userId", userId)
+            .addKeyValue("ip", clientIp)
+            .log();
+
+        logger.atWarn()
+            .setMessage("Failed login attempt")
+            .addKeyValue("username", username)
+            .addKeyValue("ip", clientIp)
+            .addKeyValue("attempt", attemptCount)
+            .log();
+
+        logger.atWarn()
+            .setMessage("Access denied")
+            .addKeyValue("userId", userId)
+            .addKeyValue("resource", resourceId)
+            .addKeyValue("action", action)
+            .log();
+
+        logger.atError()
+            .setMessage("Authentication failure")
+            .addKeyValue("reason", reason)
+            .addKeyValue("ip", clientIp)
+            .log();
+
+        // ❌ BAD: NEVER log sensitive data
+        logger.atInfo().setMessage("Login: user={}, password={}").addArgument(username).addArgument(password).log();  // NEVER!
+        logger.atDebug().setMessage("Request body: {}").addArgument(requestWithCreditCard).log();  // NEVER!
+    }
+}
 ```
 
 ---
