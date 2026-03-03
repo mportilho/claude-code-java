@@ -8,6 +8,7 @@ description: Generate conventional commit messages for Java projects. Use when u
 Generate conventional, informative commit messages for Java projects.
 
 ## When to Use
+
 - After making code changes
 - User says "commit this" / "commit changes" / "create commit"
 - Before creating PRs
@@ -15,6 +16,7 @@ Generate conventional, informative commit messages for Java projects.
 ## Format Standard
 
 Use Conventional Commits format:
+
 ```
 <type>(<scope>): <subject>
 
@@ -24,6 +26,7 @@ Use Conventional Commits format:
 ```
 
 ### Types (Java context)
+
 - **feat**: New feature (new API, new functionality)
 - **fix**: Bug fix
 - **refactor**: Code refactoring (no functional change)
@@ -32,26 +35,38 @@ Use Conventional Commits format:
 - **perf**: Performance improvement
 - **build**: Maven/Gradle changes
 - **chore**: Maintenance (dependency updates, etc)
+- **style**: Formatting, whitespace, or missing semicolons (no code change)
+- **ci**: CI configuration changes and scripts
 
 ### Scope Examples (Java specific)
+
 - Module name: `core`, `api`, `plugin-loader`
 - Component: `PluginManager`, `ExtensionFactory`
 - Area: `lifecycle`, `dependencies`, `security`
 
 ### Subject Rules
+
 - Imperative mood: "Add support" not "Added support"
 - No period at end
 - Max 50 chars
 - Lowercase after type
 
 ### Body (optional but recommended)
+
 - Explain WHAT and WHY, not HOW
 - Wrap at 72 chars
 - Reference issues: "Fixes #123" / "Relates to #456"
 
+### Footer (optional)
+
+- Use for `BREAKING CHANGE:` explanations
+- Reference co-authors (`Co-authored-by:`), sign-offs (`Signed-off-by:`), or reviewers
+- Reference related issues (`Relates-to: #456`)
+
 ## Examples
 
 ### Simple fix
+
 ```
 fix(plugin-loader): prevent NPE when plugin directory is missing
 
@@ -62,6 +77,7 @@ Fixes #234
 ```
 
 ### Feature with breaking change
+
 ```
 feat(api): add support for plugin dependencies versioning
 
@@ -72,6 +88,7 @@ Closes #567
 ```
 
 ### Refactoring
+
 ```
 refactor(core): extract plugin validation logic
 
@@ -81,6 +98,7 @@ of concerns.
 ```
 
 ### Test addition
+
 ```
 test(plugin-loader): add integration tests for plugin loading
 
@@ -91,10 +109,11 @@ Add comprehensive integration tests covering:
 ```
 
 ### Build/dependency update
-```
-build(deps): upgrade Spring Boot to 3.2.1
 
-Update Spring Boot from 3.1.0 to 3.2.1 for security patches
+```
+build(deps): upgrade Spring Boot to 4.0.0
+
+Update Spring Boot from 3.4.0 to 4.0.0 for security patches
 and performance improvements.
 ```
 
@@ -116,12 +135,14 @@ and performance improvements.
 ## Anti-patterns
 
 ❌ Avoid:
+
 - "fix stuff" / "update code" / "changes"
 - "WIP" commits (unless explicitly requested)
 - Mixing unrelated changes (use separate commits)
 - Over-detailed technical implementation in message
 
 ✅ Good commits:
+
 - Single logical change
 - Clear, searchable subject
 - References issues when applicable
@@ -130,13 +151,15 @@ and performance improvements.
 ## Integration with GitHub
 
 After commit, suggest next steps:
-- "Push changes?" 
+
+- "Push changes?"
 - "Create PR for issue #X?"
 - "Continue with next task?"
 
 ## Common Patterns for Java Projects
 
 ### Adding new functionality
+
 ```
 feat(extension): add support for prioritized extensions
 
@@ -147,6 +170,7 @@ Closes #123
 ```
 
 ### Fixing bugs
+
 ```
 fix(classloader): resolve resource lookup in nested JARs
 
@@ -158,6 +182,7 @@ Fixes #456
 ```
 
 ### Dependency updates
+
 ```
 build(deps): bump slf4j from 1.7.30 to 2.0.9
 
@@ -166,6 +191,7 @@ required as we use only stable APIs.
 ```
 
 ### Documentation improvements
+
 ```
 docs(readme): add plugin development quickstart guide
 
@@ -176,6 +202,7 @@ Add step-by-step guide for creating first plugin:
 ```
 
 ### Performance optimizations
+
 ```
 perf(plugin-loader): cache plugin descriptors
 
@@ -221,16 +248,18 @@ Closes #999
 
 ## Quick Reference Card
 
-| Change Type | Type | Example Scope |
-|-------------|------|---------------|
-| New feature | feat | api, core, loader |
-| Bug fix | fix | plugin-loader, lifecycle |
-| Refactoring | refactor | core, utils |
-| Tests | test | integration, unit |
-| Docs | docs | readme, javadoc |
-| Build | build | maven, deps |
-| Performance | perf | classloader, cache |
-| Maintenance | chore | ci, tooling |
+| Change Type | Type     | Example Scope            |
+| ----------- | -------- | ------------------------ |
+| New feature | feat     | api, core, loader        |
+| Bug fix     | fix      | plugin-loader, lifecycle |
+| Refactoring | refactor | core, utils              |
+| Tests       | test     | integration, unit        |
+| Docs        | docs     | readme, javadoc          |
+| Build       | build    | maven, deps              |
+| Performance | perf     | classloader, cache       |
+| Maintenance | chore    | tooling, dependencies    |
+| Code Style  | style    | formatting, lint         |
+| CI/CD       | ci       | github-actions, jenkins  |
 
 ## References
 
