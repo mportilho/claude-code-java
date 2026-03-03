@@ -16,9 +16,19 @@ Generate changelogs from conventional commits for Java projects.
 
 Detect versioning style using this priority order:
 
-### 1. Check CLAUDE.md (if exists)
+### 1. Check AI Instructions File (if exists)
+
+This file is the default file for AI Assistant instructions.
+
+> **Note**: The specific file name depends on the AI provider:
+> - **Claude Code**: `CLAUDE.md`
+> - **Gemini**: `.gemini/rules.md` ou `.gemini/instructions.md`
+> - **ChatGPT/GitHub Copilot**: `.github/copilot-instructions.md`
+> - **Cursor**: `.cursorrules`
+
 ```bash
-grep -A5 "## Versioning" CLAUDE.md 2>/dev/null
+# Substitute AI_RULES_FILE with the appropriate file for your environment
+grep -A5 "## Versioning" AI_RULES_FILE 2>/dev/null
 ```
 
 Look for explicit convention:
@@ -64,14 +74,14 @@ No versioning convention detected. Which format does this project use?
 | Two-component | x.y | `v2.1`, `2.1` | major.minor |
 | CalVer | YYYY.MM[.patch] | `2026.01`, `2026.01.1` | year.month[.patch] |
 
-### Legacy Projects (CLAUDE.md without versioning section)
+### Legacy Projects (AI Instructions without versioning section)
 
-If CLAUDE.md exists but has no versioning info:
+If an AI instructions file exists but has no versioning info:
 1. Don't assume - detect from tags/changelog
-2. If detected, optionally suggest adding to CLAUDE.md:
+2. If detected, optionally suggest adding to the AI instructions file:
    ```
    Detected versioning: SemVer (x.y.z) with tag prefix 'release-'
-   Want me to add this to CLAUDE.md for future reference?
+   Want me to add this to the AI instructions file for future reference?
    ```
 
 ## Output Format
@@ -87,13 +97,13 @@ Supports two formats - detect from existing CHANGELOG.md or ask user preference.
 ## [1.2.0] - 2026-01-29
 
 ### Added
-- [#123]: New feature for plugin dependencies
+- [#123]: Virtual Threads support for concurrent data processing
 
 ### Changed
-- [#456]: Improved performance of plugin loading
+- [#456]: Improved performance of bean initialization using Spring AOT
 
 ### Fixed
-- [#234]: Resolved NPE when directory missing
+- [#234]: Resolved `NullPointerException` when processing malformed JWT tokens
 ```
 
 ### Format B: pf4j style (h3 versions)
@@ -105,13 +115,13 @@ Supports two formats - detect from existing CHANGELOG.md or ask user preference.
 ### [3.15.0] - 2026-01-29
 
 #### Added
-- [#123]: New feature for plugin dependencies
+- [#123]: Virtual Threads support for concurrent data processing
 
 #### Changed
-- [#456]: Improved performance of plugin loading
+- [#456]: Improved performance of bean initialization using Spring AOT
 
 #### Fixed
-- [#234]: Resolved NPE when directory missing
+- [#234]: Resolved `NullPointerException` when processing malformed JWT tokens
 ```
 
 ## Reference-Style Links (Recommended)
@@ -184,7 +194,7 @@ Note: pf4j uses Fixed → Changed → Added → Removed. Keep a Changelog uses A
 
 1. **Check for existing CHANGELOG.md**
    ```bash
-   cat CHANGELOG.md | head -20
+   head -n 20 CHANGELOG.md
    ```
    Detect format (h2 vs h3 versions, section order, link style).
 
@@ -260,25 +270,29 @@ git log release-3.15.0..HEAD --oneline
 ### [Unreleased][unreleased]
 
 #### Fixed
-- [#650]: Fix memory leak in extension factory
+- [#650]: Fix memory leak when using Spring Boot 4 `VirtualThreadTaskExecutor` environments
+- [#643]: Resolve NPE in `AuthService` filter logic
 
 #### Changed
-- [#651]: Rename `LegacyExtension*` to `IndexedExtension*`
+- [#651]: Upgrade internal dependencies to JDK 25 base
+- [#648]: Refactor `OrderProcessor` to use scoped values
 
 #### Added
-- [#652]: Add support for plugin priority ordering
+- [#652]: Add support for Spring Framework 7 declarative retry
 ```
 
 **Step 5:** Generate link definitions
 ```markdown
-[#652]: https://github.com/pf4j/pf4j/pull/652
-[#651]: https://github.com/pf4j/pf4j/pull/651
-[#650]: https://github.com/pf4j/pf4j/issues/650
+[#652]: https://github.com/my-org/my-app/pull/652
+[#651]: https://github.com/my-org/my-app/pull/651
+[#650]: https://github.com/my-org/my-app/issues/650
+[#648]: https://github.com/my-org/my-app/pull/648
+[#643]: https://github.com/my-org/my-app/issues/643
 ```
 
 **Step 6:** Update version comparison links
 ```markdown
-[unreleased]: https://github.com/pf4j/pf4j/compare/release-3.15.0...HEAD
+[unreleased]: https://github.com/my-org/my-app/compare/release-3.15.0...HEAD
 ```
 
 **Step 7:** Suggest version
@@ -292,8 +306,8 @@ Suggested: 3.16.0 (minor - has new feature)
 List under "Changed" with original message:
 ```markdown
 #### Changed
-- Updated plugin loading mechanism
-- Refactored test utilities
+- Updated module loading mechanism to use JDK 25 features
+- Refactored integration test utilities
 ```
 
 ### Security fix
@@ -305,12 +319,12 @@ List under "Changed" with original message:
 ### Breaking change
 ```markdown
 #### Changed
-- **BREAKING**: [#645] Renamed `LegacyExtension*` classes to `IndexedExtension*`
+- **BREAKING**: [#645] Renamed `LegacyAuthFilter` to `StandardAuthFilter` and removed deprecated methods
 ```
 
 ### Multiple issues for same fix
 ```markdown
-- [#630], [#631]: Set `failedException` when plugin validation fails
+- [#630], [#631]: Set target exception correctly when JWT validation fails
 ```
 
 ## Integration with Existing CHANGELOG.md
