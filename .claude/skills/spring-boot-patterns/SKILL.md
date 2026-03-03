@@ -375,12 +375,30 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ProblemDetail handleGeneric(Exception ex) {
+    public ProblemDetail handleException(Exception ex) {
         log.error("Unexpected error", ex);
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
-        problem.setTitle("Internal Server Error");
-        problem.setProperty("code", "INTERNAL_ERROR");
-        return problem;
+        
+        // Java 21+ Pattern Matching for switch
+        return switch (ex) {
+            case IllegalArgumentException e -> {
+                ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+                pd.setTitle("Bad Request");
+                pd.setProperty("code", "BAD_REQUEST");
+                yield pd;
+            }
+            case AccessDeniedException e -> {
+                ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Access Denied");
+                pd.setTitle("Forbidden");
+                pd.setProperty("code", "FORBIDDEN");
+                yield pd;
+            }
+            default -> {
+                ProblemDetail pd = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
+                pd.setTitle("Internal Server Error");
+                pd.setProperty("code", "INTERNAL_ERROR");
+                yield pd;
+            }
+        };
     }
 }
 
@@ -452,8 +470,56 @@ src/main/resources/
 | `@Transactional` | Transaction management |
 | `@Valid` | Trigger validation |
 | `@ConfigurationProperties` | Bind properties to class |
-| `@Profile("dev")` | Profile-specific bean |
-| `@Scheduled` | Scheduled tasks |
+| @Profile("dev") | Profile-specific bean |
+| @Scheduled | Scheduled tasks |
+
+---
+
+## Modern Concurrency (Java 21+ / 25+)
+
+When dealing with multiple independent subtasks within a service layer, rely on **Structured Concurrency** (`StructuredTaskScope`) alongside virtual threads. In Java 25+, you should also use **Scoped Values** (`ScopedValue<>`) instead of `ThreadLocal` for safe, efficient context propagation.
+
+```java
+@Service
+public class ReportService {
+
+    // Define a ScopedValue for context sharing (e.g., Tenant ID or Security Context)
+    public static final ScopedValue<String> TENANT_ID = ScopedValue.newInstance();
+
+    public CombinedReport generateReport(String tenantId) throws InterruptedException {
+        // Bind the scoped value
+        return ScopedValue.where(TENANT_ID, tenantId).get(() -> {
+            try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+                // Fork independent tasks using virtual threads. 
+                // Scoped values are automatically inherited by the child threads in the scope.
+                StructuredTaskScope.Subtask<UserData> userSubtask = scope.fork(this::fetchUserData);
+                StructuredTaskScope.Subtask<SalesData> salesSubtask = scope.fork(this::fetchSalesData);
+
+                scope.join();           // Join all subtasks
+                scope.throwIfFailed();  // Propagate exceptions if any subtask failed
+
+                // Aggregate results safely
+                return new CombinedReport(userSubtask.get(), salesSubtask.get());
+            } catch (ExecutionException e) {
+                throw new RuntimeException("Failed to generate report", e);
+            }
+        });
+    }
+    
+    private UserData fetchUserData() {
+        // Access the scoped value efficiently without ThreadLocal overhead
+        String currentTenant = TENANT_ID.get(); 
+        // ... fetch data for tenant
+        return new UserData();
+    }
+
+    private SalesData fetchSalesData() {
+        String currentTenant = TENANT_ID.get();
+        // ... fetch data for tenant
+        return new SalesData();
+    }
+}
+```
 
 ---
 
@@ -514,7 +580,7 @@ class UserServiceImplTest {
 class UserIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17");
 
     @Autowired
     private MockMvc mockMvc;
