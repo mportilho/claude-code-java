@@ -33,23 +33,25 @@ Write readable, maintainable code following Clean Code principles.
 
 ```java
 // ❌ BAD: Same validation logic repeated
+public record UserRequest(String email, String name) {}
+
 public class UserController {
 
     public void createUser(UserRequest request) {
-        if (request.getEmail() == null || request.getEmail().isBlank()) {
+        if (request.email() == null || request.email().isBlank()) {
             throw new ValidationException("Email is required");
         }
-        if (!request.getEmail().contains("@")) {
+        if (!request.email().contains("@")) {
             throw new ValidationException("Invalid email format");
         }
         // ... create user
     }
 
     public void updateUser(UserRequest request) {
-        if (request.getEmail() == null || request.getEmail().isBlank()) {
+        if (request.email() == null || request.email().isBlank()) {
             throw new ValidationException("Email is required");
         }
-        if (!request.getEmail().contains("@")) {
+        if (!request.email().contains("@")) {
             throw new ValidationException("Invalid email format");
         }
         // ... update user
@@ -76,13 +78,18 @@ public class EmailValidator {
 public class UserController {
     private final EmailValidator emailValidator;
 
+    // Use Constructor Injection instead of @Autowired
+    public UserController(EmailValidator emailValidator) {
+        this.emailValidator = emailValidator;
+    }
+
     public void createUser(UserRequest request) {
-        emailValidator.validate(request.getEmail());
+        emailValidator.validate(request.email());
         // ... create user
     }
 
     public void updateUser(UserRequest request) {
-        emailValidator.validate(request.getEmail());
+        emailValidator.validate(request.email());
         // ... update user
     }
 }
@@ -180,8 +187,8 @@ public interface Repository<T, ID> {
 ### Refactored
 
 ```java
-// ✅ GOOD: Only what's needed now
-public interface UserRepository {
+// ✅ GOOD: Only what's needed now (Spring Data example)
+public interface UserRepository extends Repository<User, Long> {
     Optional<User> findById(Long id);
     User save(User user);
 }
@@ -361,13 +368,13 @@ public User createUser(String firstName, String lastName,
     // ...
 }
 
-// ✅ GOOD: Use parameter object
-public User createUser(CreateUserRequest request) {
-    // ...
-}
+// ✅ GOOD: Use parameter object (Record in Java 16+)
+public record CreateUserRequest(
+    String firstName, String lastName, String email, String phone,
+    String address, String city, String country, String zipCode
+) {}
 
-// Or builder
-public User createUser(UserBuilder builder) {
+public User createUser(CreateUserRequest request) {
     // ...
 }
 ```
@@ -520,8 +527,9 @@ public void createUser(Email email, PhoneNumber phone, ZipCode zipCode) {
 |------|-----|-----------|
 | Long method | Short methods | Extract Method |
 | Duplicate code | Single method | Extract Method |
-| Complex conditional | Polymorphism | Replace Conditional with Polymorphism |
-| Many parameters | Object | Introduce Parameter Object |
+| Complex conditional (behavior) | Polymorphism | Replace Conditional with Polymorphism |
+| Complex conditional (data) | Switch Pattern Matching | Data-Oriented Programming (JDK 21+) |
+| Many parameters | Object/Record | Introduce Parameter Object/Record |
 | Temp variables | Query method | Replace Temp with Query |
 | Comments explaining code | Self-documenting code | Rename, Extract |
 | Nested conditionals | Early return | Guard Clauses |
@@ -549,6 +557,42 @@ public void processOrder(Order order) {
     // actual logic at top level
 }
 ```
+
+---
+
+## Data-Oriented Programming (DOP) vs Polymorphism
+
+With **Java 21/25**, clean code involves choosing between classic OOP and Data-Oriented Programming.
+
+### When to use Classic Polymorphism (OOP):
+Use for behavior-rich objects where new types/classes are frequently added, but the operations (methods) remain stable.
+
+### When to use DOP (Sealed Types + Records + Switch Pattern Matching):
+Use for data-centric structures (like events or messages) where the set of types is closed, but you frequently add new operations over the data.
+
+```java
+// ✅ GOOD: DOP Pattern Matching (JDK 21+)
+public sealed interface PaymentEvent permits PaymentSuccess, PaymentFailed {}
+public record PaymentSuccess(String txId, BigDecimal amount) implements PaymentEvent {}
+public record PaymentFailed(String reason) implements PaymentEvent {}
+
+// Easy to read, exhaustive compile-time check, no scattered logic
+public void handleEvent(PaymentEvent event) {
+    switch (event) {
+        case PaymentSuccess success -> completeOrder(success.txId());
+        case PaymentFailed failed -> logger.error("Failed: {}", failed.reason());
+    }
+}
+```
+
+---
+
+## Spring Boot 4.x Clean Code Practices
+
+- **Constructor Injection:** Avoid `@Autowired` on fields. Rely on implicit constructor injection for better testability and immutability.
+- **Records for Config and DTOs:** Use `record` for `@ConfigurationProperties`, `@RequestBody`, and response DTOs instead of Lombok `@Data` or `@Value`.
+- **Selective Repositories:** Extend Spring Data's `Repository<T, ID>` to selectively expose only needed methods (YAGNI), rather than dumping `JpaRepository`/`CrudRepository` with dozens of unused methods everywhere.
+
 
 ---
 
@@ -580,3 +624,5 @@ When reviewing code, check:
 - [Java SE 11 `String#isBlank()` API](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/String.html#isBlank()) - `isBlank` is available since Java 11.
 - [Java SE `BigDecimal#compareTo(BigDecimal)` API](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html#compareTo(java.math.BigDecimal)) - relational comparisons should use `compareTo`.
 - [OpenJDK JEP 395: Records](https://openjdk.org/jeps/395) - records finalized in JDK 16.
+- [OpenJDK JEP 409: Sealed Classes](https://openjdk.org/jeps/409) - finalized in JDK 17, essential for DOP.
+- [OpenJDK JEP 441: Pattern Matching for switch](https://openjdk.org/jeps/441) - finalized in JDK 21, clean code pattern matching.
