@@ -34,17 +34,22 @@ of concerns, and lexical resilience.
   the `EOF` terminal to prevent partial parsing.
 - [ ] **[High] Lexical Fallback**: Add a final `ANY : . ;` rule in the Lexer to
   safely capture and report unknown characters.
-- [ ] **[Medium] Channel Management**: Use `-> channel(HIDDEN)` for tokens like
-  whitespace/comments if the original source must be preserved (GCD/Formatting).
-- [ ] **[Medium] Token Discarding**: Use `-> skip` if whitespace/comments are
-  irrelevant to the application to save memory/CPU.
+- [ ] **[High] Lexical Modes**: Use `mode` blocks to handle distinct contexts
+  (e.g., code inside templates) without polluting the global token set.
+- [ ] **[Medium] Fragment Audit**: Use `fragment` rules for common patterns
+  (e.g., `DIGIT`) to improve Lexer readability and reuse.
+- [ ] **[Medium] Operator Fusion**: Merge operators of the same precedence into
+  a single rule with alternations (`|`) to reduce tree depth.
+- [ ] **[Medium] Left-Factorization**: Merge alternatives with identical
+  prefixes to reduce lookahead costs for the adaptive engine.
 
 ```antlr
-// ✅ GOOD: Root rule ensures full stream consumption
-program : statement* EOF ;
+// ✅ GOOD: Operator fusion reduces recursion depth
+multiplicativeOp : '*' | '/' | '%' ;
 
-// ✅ GOOD: Lexical fallback allows graceful error handling
-ANY : . ;
+// ✅ GOOD: Lexical mode for nested blocks
+mode HTML_TAG ;
+  TAG_CLOSE : '>' -> mode(DEFAULT) ;
 ```
 
 ### 2. Patterns and "Code Smells" Checklist
@@ -53,29 +58,29 @@ ANY : . ;
   blocks to prevent OOM errors caused by greedy `.*` matching.
 - [ ] **[High] Literal Encapsulation**: Replace string literals in the Parser
   (e.g., `'if'`) with explicit Lexer tokens (e.g., `IF`).
-- [ ] **[Critical] Left-Recursion Identification**: Ensure all left-recursion
-  is "Direct". Eliminate "Indirect Left-Recursion" as it blocks generation.
+- [ ] **[High] LLM GCD Reasoning Gap**: In LLM grammars, ensure the structure
+  allows for a "thought" phase (e.g., `thought? content`) to prevent choking.
+- [ ] **[Critical] Left-Recursion**: Ensure all left-recursion is "Direct".
+  Eliminate "Indirect Left-Recursion" as it blocks generation.
 - [ ] **[High] Explicit Associativity**: Use `<assoc=right>` for operators like
   exponentiation (`^`) or assignment (`=`) that compute right-to-left.
 
 ```antlr
-// ❌ BAD: Greedy quantifier scans until the *last* quote in the file
-STRING : '"' .* '"' ; 
-
-// ✅ GOOD: Non-greedy stops at the *first* quote
-STRING : '"' .*? '"' ;
-
-// ✅ GOOD: Explicit associativity for power operators
-expr : expr '^' expr # power
-     | <assoc=right> expr '=' expr # assignment
+// ✅ GOOD: Support for LLM internal monologue before the structured JSON
+output : thoughts? json_response ;
+thoughts : THOUGHT_BLOCK ;
 ```
 
 ### 3. Implementation and Performance Checklist
 
 - [ ] **[High] Stream Walker Choice**: Use **Listeners** for large files
   (>10MB) to avoid `StackOverflowError` via the call stack.
-- [ ] **[Medium] Logical Walker Choice**: Use **Visitors** only when you need
-  to manually control node traversal or return aggregate values.
+- [ ] **[High] Big Data Strategy**: For petabyte-scale data, disable
+  `BuildParseTree` and use grammar actions (`{ ... }`) for real-time processing.
+- [ ] **[High] Version Sync**: Verify if the `ANTLR Tool` version matches the
+  project's runtime dependency version to avoid subtle bugs.
+- [ ] **[Medium] Error UX**: Custom implementations of `BaseErrorListener`
+  should translate technical errors into user-friendly messages.
 - [ ] **[Critical] Semantic Predicate Audit**: Ensure predicates `{...}?` are
   not used for syntax decisions that could be handled by pure grammar rules.
 - [ ] **[High] Two-Stage Strategy**: Implement SLL-mode first, falling back to
