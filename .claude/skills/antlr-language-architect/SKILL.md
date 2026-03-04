@@ -1,54 +1,95 @@
 ---
 name: antlr-language-architect
-description: ANTLR 4 language engineering and grammar architecture patterns. Use when designing, optimizing, testing, or reviewing ANTLR 4 grammars (.g4 files) structure.
+description: ANTLR 4.13.2+ language engineering and grammar architecture patterns. Use when designing, optimizing, testing, or reviewing ANTLR 4 grammars (.g4 files) structure, resolving ALL(*) lookahead issues, or implementing Grammar-Constrained Decoding (GCD) for LLMs.
 ---
 
 # ANTLR Language Engineer & Architect
 
-Projetar, otimizar, depurar e testar gramáticas ANTLR 4 seguindo padrões de alto desempenho, separação de preocupações e robustez na captura de erros.
+Design, optimize, debug, and test ANTLR 4 grammars following high-performance
+patterns required by the ALL(*) adaptive algorithm, strict logical separation
+of concerns, and lexical resilience.
 
 ## When to Use
-- Criar ou modificar arquivos `.g4`
-- Otimizar gramáticas ANTLR4 existentes
-- Resolver problemas de lookahead ou ambiguidades sintáticas
+
+- Creating or refactoring grammars (`.g4`) for data formats, compilers, or
+  LLM decoders (GCD).
+- Minimizing parsing inefficiency, "no viable alternative" errors, or
+  extreme memory/CPU usage (OOM) caused by SLL falling back to LL.
+- Evaluating existing grammars for "code smells" such as grammar loops,
+  greedy regex quantifiers, and lexical redundancy.
 
 ## Quick Reference
-| Componente | Padrão Recomendado |
-|---|---|
-| Léxico | Separar em `Lexer.g4`, usar `-> channel(HIDDEN)` para metadados, terminar com `ANY : . ;` |
-| Parser | Separar em `Parser.g4`, terminar regra inicial com `EOF`, rotular alternativas (`# label`) |
+
+- **Lexer**: Use `-> channel(HIDDEN)`, avoid overlaps, and `ANY : . ;` fallback.
+- **Parser**: Root rule with `EOF`, precedence via physical rule order.
+- **Walker**: Listeners for large files, Visitors for logical return values.
 
 ## Main Content
 
-### 1. Protocolo de Design de Gramática
-- **Separação de Arquivos**: Sempre separar a gramática em Lexer (`Lexer.g4` com tokens em maiúsculas) e Parser (`Parser.g4` com regras em minúsculas) para evitar ambiguidades.
-- **Consumo Total (EOF)**: A regra inicial do parser deve obrigatoriamente terminar com o token `EOF`.
-- **Robustez do Léxico**: Adicionar a regra genérica no final: `ANY : . ;`. Isso garante um token de erro explícito.
-- **Gestão de Metadados**: Utilizar `-> channel(HIDDEN)` para espaços/comentários em vez de `-> skip`.
-- **Rotulagem de Alternativas**: Rótulos (`# addExpr`) obrigatórios em alternativas de regras complexas.
+### 1. Grammar Construction Checklist
 
-### 2. Padrões de Expressões e Precedência
-- **Recursão à Esquerda**: Utilizar recursão direta nativa, ordenando alternativas da maior para a menor precedência.
-- **Associatividade**: Usar `<assoc=right>` explicitamente para operadores associativos à direita (ex: exponenciação).
-- **Inlining**: Integrar sub-produções de identificadores em chamadas de função para reduzir lookahead no modo SLL.
+- [ ] **[Critical] Separation of Concerns**: Verify if Lexer and Parser are in
+  separate files (`Lexer.g4` and `Parser.g4`).
+- [ ] **[Critical] Input Consumption**: Ensure the root Parser rule ends with
+  the `EOF` terminal to prevent partial parsing.
+- [ ] **[High] Lexical Fallback**: Add a final `ANY : . ;` rule in the Lexer to
+  safely capture and report unknown characters.
+- [ ] **[Medium] Channel Management**: Use `-> channel(HIDDEN)` for tokens like
+  whitespace/comments if the original source must be preserved (GCD/Formatting).
+- [ ] **[Medium] Token Discarding**: Use `-> skip` if whitespace/comments are
+  irrelevant to the application to save memory/CPU.
 
-### 3. Heurísticas de Análise Estática e Otimizações
-Verificar gramáticas buscando "smells":
-- **Missing ANY Rule**: Ausência de captura genérica de léxico no final do arquivo.
-- **Optional Semicolon Ambiguity**: Terminadores opcionais sem delimitação clara.
-- **Recursive Indirect Loops**: Ciclos (A -> B -> A) não solucionáveis pelo ANTLR4.
-- **Tokens Literais no Parser**: Uso direto de strings (ex: 'while') no parser. Eles devem ser migrados para declarações no léxico.
+```antlr
+// ✅ GOOD: Root rule ensures full stream consumption
+program : statement* EOF ;
 
-**Técnicas de Otimização no Nível da Gramática:**
-| Técnica | Descrição |
-|---|---|
-| **Parsing de 2 Estágios** | Prioriza o modo SLL antes de recorrer ao LL completo (reduz drásticamente custos cpu/ram). |
-| **Inlining de Funções** | Elimina regras aninhadas substituindo por tokens mais robustos gerenciados pelo léxico. |
-| **Fatoração à Esquerda** | Mescla alternativas que possuem prefixos idênticos para evitar redundância na árvore de parsing limitando o custo de lookahead. |
-| **Remoção de Parênteses** | Elimina regras redundantes de agrupamento (e sub-árvores inúteis) se elas já são cobertas logicamente por expressões ordenadas por precedência. |
+// ✅ GOOD: Lexical fallback allows graceful error handling
+ANY : . ;
+```
 
+### 2. Patterns and "Code Smells" Checklist
 
+- [ ] **[High] Non-Greedy Quantifiers**: Use `.*?` or `.+?` for strings and
+  blocks to prevent OOM errors caused by greedy `.*` matching.
+- [ ] **[High] Literal Encapsulation**: Replace string literals in the Parser
+  (e.g., `'if'`) with explicit Lexer tokens (e.g., `IF`).
+- [ ] **[Critical] Left-Recursion Identification**: Ensure all left-recursion
+  is "Direct". Eliminate "Indirect Left-Recursion" as it blocks generation.
+- [ ] **[High] Explicit Associativity**: Use `<assoc=right>` for operators like
+  exponentiation (`^`) or assignment (`=`) that compute right-to-left.
+
+```antlr
+// ❌ BAD: Greedy quantifier scans until the *last* quote in the file
+STRING : '"' .* '"' ; 
+
+// ✅ GOOD: Non-greedy stops at the *first* quote
+STRING : '"' .*? '"' ;
+
+// ✅ GOOD: Explicit associativity for power operators
+expr : expr '^' expr # power
+     | <assoc=right> expr '=' expr # assignment
+```
+
+### 3. Implementation and Performance Checklist
+
+- [ ] **[High] Stream Walker Choice**: Use **Listeners** for large files
+  (>10MB) to avoid `StackOverflowError` via the call stack.
+- [ ] **[Medium] Logical Walker Choice**: Use **Visitors** only when you need
+  to manually control node traversal or return aggregate values.
+- [ ] **[Critical] Semantic Predicate Audit**: Ensure predicates `{...}?` are
+  not used for syntax decisions that could be handled by pure grammar rules.
+- [ ] **[High] Two-Stage Strategy**: Implement SLL-mode first, falling back to
+  LL-mode only on prediction errors for maximum throughput.
+
+### 4. Testing and Diagnostics Checklist
+
+- [ ] **[Medium] Ambiguity Profiling**: Run `antlr4-parse --profiler` to identify
+  rules that cause excessive lookahead or adaptive backtracking.
+- [ ] **[Low] LISP-Tree Validation**: Use TestRig (grun) with `-tree` or `-gui`
+  to compare actual syntax trees against expected hierarchical structures.
 
 ## Token Optimization
-- Limite a verificação da gramática aos arquivos `.g4` específicos ou trechos afetados.
-- Se não for pedido especificamente para mudar a gramática ou resolver problemas de parsing, não aplique validadores gramaticais completos.
+
+- [ ] Limit evaluation to specific modified .g4 sections unless explicitly
+  instructed to perform a full language architecture review.
+- [ ] Do not assume Java API validations; focus on the grammar logic.

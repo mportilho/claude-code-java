@@ -1,28 +1,66 @@
 # ANTLR Language Engineer & Architect
 
-> Padrões, arquitetura e boas práticas para gramáticas ANTLR 4 de alto desempenho
+> Patterns, architecture, and best practices for high-performance ANTLR 4
+> grammars
 
 ## What It Does
-Este skill fornece heurísticas estruturadas para a criação, análise, teste e otimização de gramáticas e interpretadores/compiladores baseados no ANTLR 4. Aplica os melhores padrões modernos da versão 4 do ANTLR focando no algoritmo adaptativo ALL(*).
+
+This skill provides structured heuristics for creating, analyzing, testing, and
+optimizing logical grammars and interpreters / compilers based on ANTLR 4.13.2+.
+It focuses predominantly on enabling the full power of the **ALL(*) adaptive
+algorithm** by limiting SLL fallback to LL, resolving syntactic performance
+bottlenecks, and applying constraints to LLM *Grammar-Constrained Decoding*
+(GCD).
 
 ## When to Use
-- Criar gramáticas (`.g4`) para nova linguagem, analisador ou parser.
-- Encontrar ambiguidades ou resolver problemas de lookahead no parsing.
-- Avaliar gramáticas existentes procurando code smells de linguagens.
-- Validar se o teste e manuseio de erros no ANTLR está feito da forma ótima.
+
+- **"Help me optimize this parser..."**: Minimize inefficiency, ambiguities
+  (*"no viable alternative"*), or extreme memory/CPU consumption (`OOM`).
+- **"Can you write an ANTLR grammar for..."**: Create or refactor grammars
+  (`.g4`) for structured data, abstract languages, or JSON inference decoders
+  for LLMs without "reasoning gaps".
+- **"I need to extract data from this large log using ANTLR..."**: Scale the
+  lexical architecture using hidden channels and design flexible tree
+  strategies using *Listeners* to avoid degrading the Java call stack.
+- **"Evaluate if this .g4 is correct"**: Evaluate text files and logical
+  grammars to avoid *loops*, intrusive semantic predicates, and regex
+  *greediness* (Quantifiers).
 
 ## Key Concepts
-- **Algoritmo ALL(*)**: Análise adaptativa em tempo de execução que evoluiu com ANTLR 4.
-- **LL() vs SLL()**: Parsing de dois estágios otimiza performance na maioria dos casos.
-- **Separação Léxica**: Tokens (Lexer) separados das regras (Parser) garantem manutenibilidade, usando `channel(HIDDEN)` para metadados (como espaços e comentários).
+
+- **ALL(*) Algorithm (Adaptive LL(*))**: Dynamic top-down analysis capable of
+  infinite lookahead at runtime by building DFAs in memory.
+- **Two-Stage Parsing (SLL/LL)**: Central tactic of the ANTLR4 ecosystem:
+  attempting to derive based strictly on a weaker context (*Strong-LL* / fast),
+  falling back to the complex adaptive backtracking environment (LL) if - and
+  only if - lexical/syntactic errors occur in SLL.
+- **Grammar-Constrained Decoding (GCD)**: LLM models often need to format their
+  output. Filters and restricted decoding fundamentally depend on lexical
+  modeling and ignore global arbitrary Java class verification.
+- **Hidden Lexical Channeling**: ANTLR v4 decouples white spaces and comments
+  from the syntax flow using `channel(HIDDEN)`.
+- **Listener vs Visitor**: Critical decision limiting processing strategies
+  (Stack management).
 
 ## Example Usage
-> "We need to parse a custom query language. Can you write the grammar for it?"
 
-*Claude will use the templates and rules in this skill to correctly split into QueryLexer.g4 and QueryParser.g4 appropriately, applying best practices such as rule ANY and EOF token consumption.*
+> "The parser is consuming GBs of heap memory and causing OOM when processing a
+> 50MB file. Can you fix the performance issue?"
 
-
+*Claude will use the heuristics here to review quantifier greediness
+(`.*` to `.*?`), evaluate if tokens are recursively redundant, and propose
+migrating logic from massive AST Visitor allocations to event-driven Stream
+Listeners.*
 
 ## Related Skills
-- [architecture-review](../architecture-review/) - Macro review of how parsers integrate globally in Java.
-- [test-quality](../test-quality/) - Best practices in isolation tests (JUnit 5 / AssertJ) applicable to grammar parser testing.
+
+- [architecture-review](../architecture-review/) - Macro review of how parsers
+  integrate globally in Java.
+- [test-quality](../test-quality/) - Best practices in isolation tests
+  (JUnit 5 / AssertJ) applicable to grammar parser testing.
+- [antlr-java-integration](../antlr-java-integration/) - Java-specific
+  implementation details (ErrorListeners, Walker strategies implementation).
+
+## References
+
+- [Melhores Práticas ANTLR Gramáticas .g4.md](../../references/Melhores%20Práticas%20ANTLR%20Gramáticas%20.g4.md)
