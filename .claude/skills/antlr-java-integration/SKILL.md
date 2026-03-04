@@ -21,8 +21,10 @@ Guide for implementing, optimizing, and scaling ANTLR 4.13+ parsers within Java 
 |---|---|
 | **Memory Leaks** | Call `interpreter.clearDFA()` periodically in long-running processes to clear ATN cache. |
 | **Large Files (GBs)** | Use `UnbufferedCharStream`, `UnbufferedTokenStream`, and disable parse tree building. |
-| **Thread-Safety** | Instantiate new Lexer, Parser, and Traverser per thread. Do not share state. |
-| **StringTemplate** | `STGroupFile` loading is not thread-safe. Use `ScopedValue` (Java 21+) or synchronize loading. |
+| **Thread-Safety** | Instantiate new Lexer, Parser, and Traverser per thread. `STGroupFile` is not thread-safe. |
+| **Grammar Design** | Use `#` labels for specific visitor methods and always include `EOF` in start rule. |
+| **Ambiguity** | Order Lexer rules from most specific (keywords) to general (identifiers). |
+| **Predicates** | Minimize complex Java logic in `{...}?` predicates as they run during prediction. |
 | **Cold-Start** | Run parsing on dummy data at startup to populate the ATN DFA cache. |
 
 ## Main Content
@@ -57,6 +59,14 @@ Guide for implementing, optimizing, and scaling ANTLR 4.13+ parsers within Java 
 - **Warm-Up Phase**: The first time an ALL(*) parser runs, it lazily builds the DFA transition tables. This "cold start" can be up to 10x slower than subsequent runs.
   - For latency-sensitive systems, run a set of representative parse operations during application startup to warm up the ATN cache.
 - **Custom Error Handling**: Avoid default console error reporting in production. Always remove default listeners (`removeErrorListeners()`) and provide a custom `ANTLRErrorListener` to collect errors or log them to standard APM tools.
+- **Indirect Recursion**: ANTLR 4 does not support indirect left-recursion (e.g., `a: b; b: a;`). If encountered, it will fail during the Java code generation/build phase.
+
+### 5. Grammar-to-Java Optimization
+
+- **Start Rule EOF**: Always end the main entry rule with `EOF`. Without it, the parser may stop early on a valid prefix and ignore trailing junk, leading to hard-to-debug integration issues.
+- **Visitor Labeling**: Use `#` labels on alternatives for complex rules. This forces ANTLR to generate specific visitor/listener methods (e.g., `visitAddition`) instead of a single generic method, making the Java implementation cleaner.
+- **Lexer Rule Order**: ANTLR Lexers are "greedy" and match rules in declaration order. Define specific keywords **above** general identifiers to avoid incorrect tokenization in Java.
+- **Predicates Complexity**: Java code inside semantic predicates (e.g., `{isType(ID)}?`) runs frequently during the ATN prediction phase. Keep this logic lean to avoid performance degradation.
 
 ### 5. Modern Custom Error Handling
 
@@ -140,6 +150,17 @@ public static String parse(String text) throws ParseCancellationException {
 }
 ```
 
+### 7. Severity & Risk Matrix
+
+| Severity | Issue | Impact | Mitigation |
+|---|---|---|---|
+| **Critical** | Indirect Left-Recursion | Build fails. Code generation is impossible. | Rewrite grammar to remove cycles or inline rules. |
+| **High** | OOM on Giant Files | JVM crash. Builds/Parses massive trees in memory. | Use unbuffered streams and `parser.setBuildParseTree(false)`. |
+| **High** | ATN/DFA Cache Leak | Progressive RAM exhaustion in servers. | Periodically call `clearDFA()` on interpreters. |
+| **Medium** | Missing EOF in Start Rule | Silent failures on invalid input suffixes. | Append `EOF` to the start rule. |
+| **Medium** | Slow Semantic Predicates | Parsing performance degrades during prediction. | Optimize Java logic inside `{...}?` predicates. |
+| **Low** | Missing Rule Labels | Harder to maintain generic Visitors/Listeners. | Use `#` labels for specific method generation. |
+
 ## Anti-patterns
 
 ❌ **Avoid**:
@@ -202,6 +223,8 @@ When reviewing or writing ANTLR Java integration code, verify the following:
 - [ ] **[Medium] StringTemplate Security**: Are `STGroup` and `CompiledST` instances safely shared using `ScopedValue` or initialization synchronization?
 - [ ] **[Low] Tree Building Scope**: Is `parser.setBuildParseTree(false)` called when processing massive inputs where an AST manipulation is unnecessary?
 - [ ] **[Low] Performance Warmup**: Is a dummy parse running at startup to warm up the ALL(*) DFA cache in latency-critical scenarios?
+- [ ] **[Low] Start Rule Integrity**: Does the entry rule end with `EOF` to ensure full input consumption?
+- [ ] **[Low] Rule Labeling**: Are `#` labels used in complex rules to simplify the Java Visitor/Listener?
 - [ ] **[Low] Test Isolation**: Are Lexer and Parser components tested independently (e.g. mocking token streams via `ListTokenSource`)?
 
 ## Token Optimization

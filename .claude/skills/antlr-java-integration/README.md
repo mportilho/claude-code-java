@@ -26,7 +26,11 @@ Using `UnbufferedCharStream` and `UnbufferedTokenStream` prevents ANTLR from loa
 
 ### Strict Thread Isolation
 
-Lexer, Parser, and Traverser implementations are stateful. Their instances must be completely isolated per processing thread.
+Lexer, Parser, and Traverser implementations are stateful. Their instances must be completely isolated per processing thread. Note that `STGroupFile` (StringTemplate 4) has known thread-safety issues during initialization.
+
+### Grammar-Java Interface
+
+Properly structured grammars lead to better Java code. This includes using `#` labels for specific visitor methods, enforcing full input consumption with `EOF`, and prioritizing specific Lexer rules (keywords) over general ones (identifiers).
 
 ## Example Usage
 
@@ -74,6 +78,24 @@ MyParser parser = new MyParser(tokens);
 parser.setBuildParseTree(false); // Disable tree building to save memory
 ```
 
+### 3. Clean Visitor Implementation
+
+```java
+// ❌ BAD: Handling a generic node with 'if/else' checks
+@Override
+public Object visitExpr(MyParser.ExprContext ctx) {
+    if (ctx.ADD() != null) { /* ... */ }
+    return super.visitExpr(ctx);
+}
+
+// ✅ GOOD: Using # labels in .g4 to generate specific methods
+// .g4: expr: expr '+' expr #Addition | INT #Integer;
+@Override
+public Object visitAddition(MyParser.AdditionContext ctx) {
+    return (Integer)visit(ctx.expr(0)) + (Integer)visit(ctx.expr(1));
+}
+```
+
 ## Related Skills
 
 - [antlr-language-architect](../antlr-language-architect/) - For grammar design (`.g4`), lexer/parser separation, and optimization.
@@ -84,3 +106,4 @@ parser.setBuildParseTree(false); // Disable tree building to save memory
 - The Definitive ANTLR 4 Reference - Terence Parr
 - Adaptive LL(*) Parsing: The Power of Dynamic Analysis - ANTLR
 - Optimizing ANTLR Memory Footprint
+- ANTLR em Java: Guia Prático (Referência Técnica)
