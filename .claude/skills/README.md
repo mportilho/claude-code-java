@@ -48,6 +48,7 @@ Each skill folder contains:
 | [jpa-patterns](jpa-patterns/) | JPA/Hibernate patterns (N+1, lazy loading, transactions) |
 | [logging-patterns](logging-patterns/) | Structured logging (JSON), SLF4J, MDC, AI-friendly formats |
 | [antlr-language-architect](antlr-language-architect/) | ANTLR 4 grammar design, optimization, and tree traversal patterns |
+| [antlr-java-integration](antlr-java-integration/) | ANTLR 4 Java embedding: thread-safety, memory management, and large files |
 
 ## Adding a New Skill
 
